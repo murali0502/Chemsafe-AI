@@ -6,3 +6,7 @@ __pycache__/
 .pytest_cache/
 data/
 models/
+
+# Earlier architecture, not used by the current Streamlit MVP
+backend/
+frontend/
