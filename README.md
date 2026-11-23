@@ -26,8 +26,16 @@ Install dependencies:
 
     pip install -r requirements.txt
 
-Download the dataset using the Hugging Face datasets library and export
-the train, validation, and test splits to the data/ directory.
+From the repository root, download and validate the SafeChem splits:
+
+    python prepare_data.py
+
+The script downloads the original CSV files from a pinned
+[SafeChem revision](https://huggingface.co/datasets/Anonymous-07/SafeChem/tree/43fa095c6020ad0a34f2c34301e83b29aa11ce05)
+and writes `data/safechem_train.csv`, `data/safechem_validation.csv`, and
+`data/safechem_test.csv`. It validates all three files before replacing
+any existing CSVs with those names. The script uses the Python standard
+library and requires an internet connection.
 
 Train models:
 
