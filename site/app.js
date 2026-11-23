@@ -5,6 +5,7 @@ const targets = { flammable_liquids: "Flammable liquids", flammable_solids: "Fla
 const safety = "Research prototype. Verify the exact product against its current Safety Data Sheet (SDS).";
 const zeroLabel = "A zero label is not proof of nonflammability.";
 const scoreNotice = "The model score is not a calibrated probability of real-world flammability.";
+const conflictNotice = "SafeChem records for this identifier disagree on substance details or hazard labels.";
 const solidsNotice = "The solids prediction is withheld from assessments. See Model results for the evaluation.";
 const source = "https://huggingface.co/datasets/Anonymous-07/SafeChem";
 const pageSize = 50;
@@ -26,9 +27,15 @@ function nameKey(value) {
 }
 
 function casKey(value) {
-  const term = nameKey(value);
-  const match = term.match(/^([0-9]{2,})\s*-\s*([0-9]{2})\s*-\s*([0-9])$/);
-  return match ? `${match[1].replace(/^0+(?=\d)/, "").padStart(2, "0")}-${match[2]}-${match[3]}` : term;
+  const term = nameKey(value).replace(/[‐‑–—]/g, "-").replace(/\s+/g, "");
+  const match = term.match(/^([0-9]{2,})-([0-9]{2})-([0-9])$/)
+    ?? term.match(/^([0-9]{2,})([0-9]{2})([0-9])$/);
+  if (!match) return "";
+  const first = match[1].replace(/^0+(?=\d)/, "").padStart(2, "0");
+  if (first.length > 7 || Number(first) === 0) return "";
+  const check = [...(first + match[2])].reverse()
+    .reduce((sum, digit, index) => sum + Number(digit) * (index + 1), 0);
+  return check % 10 === Number(match[3]) ? `${first}-${match[2]}-${match[3]}` : "";
 }
 
 function labelMeaning(value) {
@@ -48,14 +55,21 @@ function route() {
   if (requested === section) window.scrollTo(0, 0);
 }
 
-function searchRows(query) {
+function searchRows(query, strictCas = false) {
   const term = nameKey(query);
   const cas = casKey(term);
-  const exact = rows.filter((row) => row.name === term || row.alias === term || row.cas === cas);
+  if (strictCas && /^[0-9\s‐‑–—-]+$/.test(term)) {
+    return {
+      records: cas ? grouped.get(`CAS:${cas}`) ?? [] : [],
+      exact: true,
+      invalidCas: !cas,
+    };
+  }
+  const exact = rows.filter((row) => row.name === term || row.alias === term || (cas && row.cas === cas));
   if (exact.length) return { records: exact, exact: true };
   const records = rows.filter((row) =>
     row.name.includes(term) || row.alias.includes(term) ||
-    row.cas.includes(cas) || nameKey(row.cas_number).includes(term));
+    (cas && row.cas.includes(cas)) || nameKey(row.cas_number).includes(term));
   records.sort((a, b) => Number(b.name.startsWith(term)) - Number(a.name.startsWith(term)));
   return { records, exact: false };
 }
@@ -77,15 +91,21 @@ function downloadCsv(filename, fields, data) {
 
 function search(query) {
   if (!catalog || !query.trim()) return;
-  const { records, exact } = searchRows(query);
+  const { records, exact, invalidCas } = searchRows(query, true);
   const matches = get("matches");
   const result = get("assessment-result");
   result.hidden = true;
   result.replaceChildren();
   matches.replaceChildren();
   matches.hidden = records.length === 0;
-  const keys = [...new Set(records.map((row) => row.group))];
-  get("search-status").textContent = keys.length
+  const candidates = new Map();
+  for (const row of records) {
+    if (!candidates.has(row.group)) candidates.set(row.group, row);
+  }
+  const keys = [...candidates.keys()];
+  get("search-status").textContent = invalidCas
+    ? "Enter a complete, valid CAS number. Check the digits against the product’s current SDS."
+    : keys.length
     ? `${fmt.format(keys.length)} ${exact ? "exact" : "partial"} ${keys.length === 1 ? "match" : "matches"}`
     : "No matching record. Check the spelling or CAS number and consult the product’s current SDS.";
   if (!keys.length) return;
@@ -97,7 +117,7 @@ function search(query) {
   placeholder.disabled = true;
   select.append(placeholder);
   keys.forEach((key, index) => {
-    const row = grouped.get(key)[0];
+    const row = candidates.get(key);
     select.add(new Option(`${row.primary_name || "Unnamed substance"} · ${row.cas_number || "CAS unavailable"}`, String(index)));
   });
   const identity = node("div");
@@ -107,41 +127,68 @@ function search(query) {
     result.hidden = true;
     result.replaceChildren();
     identity.replaceChildren();
-    if (select.value !== "") renderIdentity(grouped.get(keys[Number(select.value)]), identity);
+    if (select.value !== "") {
+      const key = keys[Number(select.value)];
+      renderIdentity(grouped.get(key), candidates.get(key), identity);
+    }
   };
   select.addEventListener("change", update);
   select.value = keys.length === 1 ? "0" : "";
   update();
 }
 
-function renderIdentity(records, container) {
-  const disagreement = new Set(records.map((row) => JSON.stringify(Object.keys(targets).map((key) => row[key])))).size > 1;
+function renderIdentity(records, candidate, container) {
+  const distinctLabels = new Set(records.map((row) => JSON.stringify(Object.keys(targets).map((key) => row[key]))));
+  const identities = new Set(records.map((row) => nameKey(row.inchi_key)).filter(Boolean));
+  const formulas = new Set(records.map((row) => nameKey(row.molecular_formula)).filter(Boolean));
+  const disagreement = distinctLabels.size > 1 || identities.size > 1 || formulas.size > 1;
   const properties = node("dl", undefined, "identity");
-  const toggle = node("button", "Confirm substance", "primary");
-  toggle.type = "button";
+  const confirm = node("button", "Confirm substance", "primary");
+  confirm.type = "button";
   const choose = node("select");
   choose.setAttribute("aria-label", "Source record");
-  container.append(properties);
   if (disagreement) {
-    container.append(node("p", "Matching records disagree on recorded hazard labels. Choose the source record to review.", "warning"));
+    container.append(node("p", conflictNotice + " Choose the source record to review.", "warning"));
+    const placeholder = new Option("Choose a source record", "");
+    placeholder.disabled = true;
+    choose.add(placeholder);
     records.forEach((row, index) => choose.add(new Option(
-      `Record ${index + 1} · ${row.dataset_split} · liquid ${row.flammable_liquids ?? "unknown"} · solid ${row.flammable_solids ?? "unknown"}`, String(index))));
+      `${row.primary_name || "Unnamed substance"} · ${row.dataset_split} · ${row.molecular_formula || "formula unavailable"} · liquid ${row.flammable_liquids ?? "unknown"} · solid ${row.flammable_solids ?? "unknown"}`,
+      String(index))));
+    choose.value = "";
     container.append(choose);
   }
-  container.append(toggle);
-  function selected() { return records[disagreement ? Number(choose.value) : 0]; }
+  container.append(properties, confirm);
+
+  function selected() {
+    return disagreement ? records[Number.parseInt(choose.value, 10)] : candidate;
+  }
+
   function update() {
     const row = selected();
+    confirm.disabled = !row;
     properties.replaceChildren();
-    for (const [label, value] of [["CAS number", row.cas_number], ["IUPAC name", row.iupac_name], ["Formula", row.molecular_formula]]) {
+    get("assessment-result").hidden = true;
+    if (!row) return;
+    const fields = [
+      ["Source name", row.primary_name],
+      ["CAS number", row.cas || row.cas_number],
+      ["Formula", row.molecular_formula],
+    ];
+    if (row.iupac_name) fields.push(["IUPAC name", row.iupac_name]);
+    for (const [label, value] of fields) {
       const item = node("div");
       item.append(node("dt", label), node("dd", value || "Unavailable"));
       properties.append(item);
     }
-    get("assessment-result").hidden = true;
+    if (row.cas_number && !row.cas) {
+      const notice = node("div", undefined, "identity-note");
+      notice.append(node("dt", "Identifier check"), node("dd", "The recorded CAS value failed the format or check-digit check."));
+      properties.append(notice);
+    }
   }
   choose.addEventListener("change", update);
-  toggle.addEventListener("click", () => renderAssessment(selected(), disagreement));
+  confirm.addEventListener("click", () => renderAssessment(selected(), disagreement));
   update();
 }
 
@@ -157,8 +204,9 @@ function renderAssessment(row, conflict) {
   const evidence = node("div", undefined, "evidence");
   const report = { chemical_name: row.primary_name, cas_number: row.cas_number, molecular_formula: row.molecular_formula,
     flash_point: row.flash_point, boiling_point: row.boiling_point, dataset_split: row.dataset_split,
-    dataset_revision: catalog.revision, safety_notice: safety, zero_label_notice: zeroLabel,
-    record_conflict_notice: conflict ? "Matching SafeChem records disagree on recorded hazard labels." : "" };
+    dataset_revision: catalog.revision, normalized_cas_number: row.cas || "",
+    safety_notice: safety, zero_label_notice: zeroLabel,
+    record_conflict_notice: conflict ? conflictNotice : "" };
   Object.entries(targets).forEach(([field, label]) => {
     const value = row[field];
     const meaning = labelMeaning(value);
@@ -170,18 +218,27 @@ function renderAssessment(row, conflict) {
   });
   recorded.append(title, provenance, evidence, node("p", zeroLabel, "muted"));
 
-  const model = node("section", undefined, "panel");
+  const model = node("details", undefined, "panel");
+  model.append(node("summary", "Show experimental liquids prediction"));
   const meter = node("progress");
   meter.max = 1;
   meter.value = row.liquid_score;
   meter.setAttribute("aria-label", "Positive-class score");
-  model.append(node("h2", "Experimental model"), node("p", solidsNotice, "muted"),
-    node("h3", "Flammable liquids"), node("p", `Predicted ${row.liquid_prediction === 1 ? "positive" : "negative"} label · ${percent(row.liquid_score)} positive-class score`),
-    meter, node("p", scoreNotice, "muted"));
-  report.model_prediction_flammable_liquids = row.liquid_prediction;
-  report.model_positive_score_flammable_liquids = row.liquid_score;
-  report.model_score_notice = scoreNotice;
-  report.model_evaluation_notice_flammable_solids = solidsNotice;
+  if (conflict) {
+    model.append(node("p", "The experimental prediction is withheld because the source records disagree.", "warning"));
+  } else {
+    model.append(node("p", `Predicted ${row.liquid_prediction === 1 ? "positive" : "negative"} label · ${percent(row.liquid_score)} positive-class score`),
+      meter, node("p", scoreNotice, "muted"));
+    const metrics = catalog.metrics.flammable_liquids;
+    const [missed, detected] = metrics.confusion_matrix_labels_0_1[1];
+    model.append(node("p",
+      `On SafeChem’s test split, this model detected ${fmt.format(detected)} of ${fmt.format(detected + missed)} positive labels (${percent(metrics.positive_recall)} recall).`,
+      "muted"));
+    if (row.dataset_split === "train") {
+      model.append(node("p", "This record belongs to the training split. Its score is an in-sample prediction.", "muted"));
+    }
+  }
+  model.append(node("p", solidsNotice, "muted"));
 
   const details = node("details", undefined, "panel");
   details.append(node("summary", "Molecular properties and identifiers"));
@@ -198,7 +255,16 @@ function renderAssessment(row, conflict) {
     details.append(pubchem);
   }
   const exportButton = node("button", "Download assessment CSV", "primary");
-  exportButton.addEventListener("click", () => downloadCsv("chemsafe_assessment.csv", Object.keys(report), [report]));
+  exportButton.addEventListener("click", () => {
+    const exportRecord = { ...report };
+    if (model.open && !conflict) {
+      exportRecord.model_prediction_flammable_liquids = row.liquid_prediction;
+      exportRecord.model_positive_score_flammable_liquids = row.liquid_score;
+      exportRecord.model_score_notice = scoreNotice;
+      exportRecord.model_evaluation_notice_flammable_solids = solidsNotice;
+    }
+    downloadCsv("chemsafe_assessment.csv", Object.keys(exportRecord), [exportRecord]);
+  });
   result.replaceChildren(recorded, model, details, exportButton);
   result.hidden = false;
   title.focus();
@@ -293,14 +359,14 @@ async function load() {
     row.name = nameKey(row.primary_name);
     row.alias = nameKey(row.iupac_name);
     row.cas = casKey(row.cas_number);
-    row.group = JSON.stringify([row.name, row.cas]);
+    row.group = row.cas ? `CAS:${row.cas}` : JSON.stringify([row.name, nameKey(row.cas_number)]);
     if (!grouped.has(row.group)) grouped.set(row.group, []);
     grouped.get(row.group).push(row);
     return row;
   });
   get("dataset-link").href = `${source}/tree/${catalog.revision}`;
   const stats = get("catalog-stats");
-  for (const [label, value] of [["SafeChem records", rows.length], ["CAS identifiers", new Set(rows.map((row) => row.cas).filter(Boolean)).size], ["Dataset splits", new Set(rows.map((row) => row.dataset_split)).size]]) {
+  for (const [label, value] of [["SafeChem records", rows.length], ["Valid-format CAS identifiers", new Set(rows.map((row) => row.cas).filter(Boolean)).size], ["Dataset splits", new Set(rows.map((row) => row.dataset_split)).size]]) {
     const item = node("div");
     item.append(node("dt", label), node("dd", fmt.format(value)));
     stats.append(item);
@@ -311,6 +377,11 @@ async function load() {
   document.querySelectorAll("#search-form button, [data-example]").forEach((button) => { button.disabled = false; });
 }
 
+get("query").addEventListener("input", () => {
+  get("matches").hidden = true;
+  get("assessment-result").hidden = true;
+  get("search-status").textContent = "";
+});
 get("search-form").addEventListener("submit", (event) => {
   event.preventDefault();
   search(get("query").value);

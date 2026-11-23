@@ -52,6 +52,13 @@ downloads the pinned SafeChem dataset, trains the same models, and
 generates the catalog, liquids scores, and evaluation metrics ahead of
 time. Published pages need no separate Python server.
 
+Assessment searches validate the CAS check digit and require an exact
+CAS match for numeric input. If records for the same CAS disagree on
+identity details or hazard labels, the user must select a source row.
+Experimental liquids scores are opt-in and withheld for those conflicts.
+A valid CAS check digit checks transcription only. Review the product's
+current SDS for any safety decision.
+
 Connect this repository's `main` branch to a project in your Netlify
 team. Netlify reads the build command and output path from
 `netlify.toml`. For a local preview, install the dependencies and run:
