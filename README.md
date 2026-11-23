@@ -45,6 +45,18 @@ Run the application:
 
     streamlit run app.py
 
+## Deployment
+
+Railway builds from the repository's Dockerfile. The image downloads
+the pinned SafeChem splits and trains both models at build time.
+The service listens on Railway's assigned port and checks
+`/_stcore/health` before serving traffic.
+
+To build and run the same image locally:
+
+    docker build -t chemsafe-ai .
+    docker run --rm -p 8080:8080 chemsafe-ai
+
 ## Model evaluation
 
 The training command compares each random forest with a majority-class

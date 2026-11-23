@@ -1,0 +1,6 @@
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+healthcheckPath = "/_stcore/health"
+healthcheckTimeout = 120
