@@ -44,7 +44,7 @@ CONFLICT_NOTICE = (
 )
 ZERO_RECALL_NOTICE = "This model detected zero positive labels in its test evaluation."
 SOLIDS_NOTICE = (
-    "The solids prediction is withheld because the model missed all positive test labels. "
+    "The solids prediction is withheld from assessments. "
     "See Model results for the evaluation."
 )
 
