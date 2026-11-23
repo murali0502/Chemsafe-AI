@@ -51,7 +51,7 @@ input::placeholder { color: var(--muted); }
 nav { display: flex; flex-wrap: wrap; gap: .35rem; }
 nav a { color: var(--muted); text-decoration: none; padding: .48rem .7rem; border: 1px solid transparent; border-radius: .55rem; transition: color .2s, background .2s; }
 nav a:hover { color: var(--ink); }
-nav a[aria-current] { color: #e9efff; background: #27355f; border-color: #3a4c83; }
+nav a[aria-current="page"] { color: #e9efff; background: #27355f; border-color: #3a4c83; }
 
 main { min-height: 68vh; padding-block: 1.7rem 3rem; }
 .hero {
@@ -189,4 +189,27 @@ tbody tr:hover { background: #1d2a4a; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+
+.sds-detail:empty, .actions [role="status"]:empty { display: none; }
+.sds-detail .identity { margin: .5rem 0; }
+.sds-panel { border-left: 3px solid var(--teal); }
+#assessment-result > :nth-child(5) { animation-delay: 160ms; }
+
+.case-hero { display: block; }
+.case-hero .case-eyebrow { margin: 0 0 .8rem; color: var(--teal); font-size: .95rem; font-weight: 700; }
+.case-hero .actions { margin-top: 1.35rem; }
+.button-link { display: inline-block; padding: .62rem 1rem; color: var(--ink); border: 1px solid var(--border); border-radius: .72rem; text-decoration: none; font-weight: 650; }
+.button-link.primary { color: #101939; }
+.button-link:hover { border-color: var(--blue); }
+.case-decisions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 0; }
+.case-decisions > div { border-top: 1px solid var(--border); padding-top: .75rem; }
+.case-decisions dt { color: var(--ink); }
+.case-decisions dd, .transcript { color: var(--muted); }
+.case-study video { display: block; width: 100%; max-width: 56rem; aspect-ratio: 16 / 9; background: var(--base); border: 1px solid var(--border); border-radius: .75rem; }
+.transcript li { margin-bottom: .5rem; }
+@media (max-width: 640px) {
+  .case-decisions { grid-template-columns: 1fr; }
+  .case-study .stats dd { font-size: 1.1rem; }
 }

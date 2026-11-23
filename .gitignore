@@ -13,3 +13,5 @@ frontend/
 
 .netlify/
 netlify-dist/
+
+node_modules/

@@ -1,5 +1,7 @@
 # Chemsafe AI
 
+[Live app](https://chemsafe-ai.netlify.app/) · [Portfolio case study](https://chemsafe-ai.netlify.app/case-study.html)
+
 Chemical Flammability Intelligence Platform built with Streamlit,
 pandas, and scikit-learn.
 
@@ -61,8 +63,9 @@ current SDS for any safety decision.
 
 Connect this repository's `main` branch to a project in your Netlify
 team. Netlify reads the build command and output path from
-`netlify.toml`. For a local preview, install the dependencies and run:
+`netlify.toml`. For a local preview, install the Python dependencies and run:
 
+    npm ci
     python prepare_data.py
     python train_model.py
     python build_netlify.py
@@ -71,6 +74,20 @@ team. Netlify reads the build command and output path from
 The generated catalog selects fields and adds model outputs to the
 [SafeChem dataset](https://huggingface.co/datasets/Anonymous-07/SafeChem)
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+### Product SDS catalog and assessment PDFs
+
+Add only public-approved manufacturer SDS entries to `sds_catalog.json`.
+Each entry has `cas_number`, `manufacturer`, `product_name`, an optional
+`product_code`, an ISO `revision_date` such as `YYYY-MM-DD`, and an
+official HTTPS `sds_url`. Entries are published to the browser, so keep
+private document URLs and client information out of this file. The tool
+checks identifiers and dates at build time. A person should verify that
+each sheet matches the exact product and is the current revision.
+
+The browser generates an evidence-only PDF containing the recorded
+labels, dataset revision, and selected manufacturer sheet when available.
+The assessment and dataset CSV exports remain available.
 
 ## Streamlit deployment
 

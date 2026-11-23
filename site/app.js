@@ -1,3 +1,5 @@
+import { downloadAssessmentPdf } from "./report.js";
+
 const get = (id) => document.getElementById(id);
 const fmt = new Intl.NumberFormat("en");
 const percent = (value) => `${(100 * value).toFixed(1)}%`;
@@ -192,6 +194,52 @@ function renderIdentity(records, candidate, container) {
   update();
 }
 
+
+function renderSds(cas) {
+  const section = node("section", undefined, "panel sds-panel");
+  const products = Object.hasOwn(catalog.sds_catalog, cas) ? catalog.sds_catalog[cas] : [];
+  section.append(node("h2", "Product Safety Data Sheets"));
+  if (!products.length) {
+    section.append(node("p", "No product SDS is listed for this record. Obtain the current sheet from the manufacturer for the exact product.", "muted"));
+    return { section, selected: () => null };
+  }
+
+  section.append(node("p", "Match the manufacturer and product code on your container before selecting a sheet.", "muted"));
+  const select = node("select");
+  select.setAttribute("aria-label", "Product Safety Data Sheet");
+  select.add(new Option("Choose the exact product SDS", ""));
+  products.forEach((product, index) => {
+    const code = product.product_code ? ` · ${product.product_code}` : "";
+    select.add(new Option(
+      `${product.manufacturer} · ${product.product_name}${code} · ${product.revision_date}`,
+      String(index),
+    ));
+  });
+  const detail = node("div", undefined, "sds-detail");
+  const selected = () => products[Number.parseInt(select.value, 10)] ?? null;
+  select.addEventListener("change", () => {
+    detail.replaceChildren();
+    const product = selected();
+    if (!product) return;
+    const identity = node("dl", undefined, "identity");
+    for (const [label, value] of [
+      ["Manufacturer", product.manufacturer], ["Product", product.product_name],
+      ["Product code", product.product_code || "Unavailable"], ["SDS revision", product.revision_date],
+    ]) {
+      const field = node("div");
+      field.append(node("dt", label), node("dd", value));
+      identity.append(field);
+    }
+    const link = node("a", "Open manufacturer SDS");
+    link.href = product.sds_url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    detail.append(identity, link);
+  });
+  section.append(select, detail);
+  return { section, selected };
+}
+
 function renderAssessment(row, conflict) {
   const result = get("assessment-result");
   const recorded = node("section", undefined, "panel rise");
@@ -218,6 +266,7 @@ function renderAssessment(row, conflict) {
   });
   recorded.append(title, provenance, evidence, node("p", zeroLabel, "muted"));
 
+  const sds = renderSds(row.cas);
   const model = node("details", undefined, "panel");
   model.append(node("summary", "Show experimental liquids prediction"));
   const meter = node("progress");
@@ -254,9 +303,34 @@ function renderAssessment(row, conflict) {
     pubchem.href = `https://pubchem.ncbi.nlm.nih.gov/compound/${row.cid}`;
     details.append(pubchem);
   }
-  const exportButton = node("button", "Download assessment CSV", "primary");
+  const actions = node("div", undefined, "actions");
+  const pdfButton = node("button", "Download assessment PDF", "primary");
+  const pdfStatus = node("p", undefined, "muted");
+  pdfStatus.setAttribute("role", "status");
+  pdfButton.addEventListener("click", async () => {
+    pdfButton.disabled = true;
+    pdfStatus.textContent = "Preparing your PDF…";
+    try {
+      await downloadAssessmentPdf(report, sds.selected());
+      pdfStatus.textContent = "PDF downloaded.";
+    } catch (error) {
+      console.error(error);
+      pdfStatus.textContent = "Could not create the PDF. Please try again.";
+    } finally {
+      pdfButton.disabled = false;
+    }
+  });
+  const exportButton = node("button", "Download assessment CSV");
   exportButton.addEventListener("click", () => {
     const exportRecord = { ...report };
+    const product = sds.selected();
+    if (product) {
+      exportRecord.sds_manufacturer = product.manufacturer;
+      exportRecord.sds_product_name = product.product_name;
+      exportRecord.sds_product_code = product.product_code;
+      exportRecord.sds_revision_date = product.revision_date;
+      exportRecord.sds_url = product.sds_url;
+    }
     if (model.open && !conflict) {
       exportRecord.model_prediction_flammable_liquids = row.liquid_prediction;
       exportRecord.model_positive_score_flammable_liquids = row.liquid_score;
@@ -265,7 +339,8 @@ function renderAssessment(row, conflict) {
     }
     downloadCsv("chemsafe_assessment.csv", Object.keys(exportRecord), [exportRecord]);
   });
-  result.replaceChildren(recorded, model, details, exportButton);
+  actions.append(pdfButton, exportButton, pdfStatus);
+  result.replaceChildren(recorded, sds.section, model, details, actions);
   result.hidden = false;
   title.focus();
 }

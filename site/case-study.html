@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a1022">
+  <meta name="description" content="A freelancing portfolio case study about building a traceable chemical assessment workflow.">
+  <title>Chemsafe AI · Portfolio case study</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <a href="#main" class="skip">Skip to content</a>
+  <header class="top">
+    <div class="shell top-inner">
+      <a class="brand" href="/"><span class="mark" aria-hidden="true">Cs</span> Chemsafe <span>AI</span></a>
+      <nav aria-label="Main navigation">
+        <a href="/#assessment">Live app</a>
+        <a href="/case-study.html" aria-current="page">Case study</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="shell case-study">
+    <section class="hero case-hero" aria-labelledby="case-title">
+      <div class="hero-copy">
+        <p class="case-eyebrow">Independent portfolio project</p>
+        <h1 id="case-title">Chemsafe AI<span>.</span></h1>
+        <p>A public web app for finding a chemical record, checking its source, and sharing the recorded flammability evidence.</p>
+        <div class="actions">
+          <a class="button-link primary" href="/#assessment">Try the live app</a>
+          <a class="button-link" href="https://github.com/murali0502/Chemsafe-AI">View source</a>
+        </div>
+      </div>
+    </section>
+    <dl class="stats">
+      <div><dt>SafeChem records</dt><dd>32,211</dd></div>
+      <div><dt>Recorded hazard categories</dt><dd>2</dd></div>
+      <div><dt>Assessment formats</dt><dd>PDF and CSV</dd></div>
+    </dl>
+    <section class="panel" aria-labelledby="problem-title">
+      <h2 id="problem-title">The problem</h2>
+      <p>A common name can point to several records. A mistyped CAS number can make the wrong record look like a plausible match. The workflow helps users confirm the substance and carry the source into a report they can share.</p>
+    </section>
+    <section class="panel" aria-labelledby="decisions-title">
+      <h2 id="decisions-title">Implementation decisions</h2>
+      <dl class="case-decisions">
+        <div><dt>Confirm the identity first</dt><dd>Accept names and IUPAC aliases. Check CAS digits, use exact CAS matches, and require a source selection when records disagree.</dd></div>
+        <div><dt>Carry the evidence into the report</dt><dd>Show the dataset revision and the recorded labels. Attach a manufacturer SDS to the report when the user selects the exact product from the approved catalog.</dd></div>
+        <div><dt>Evaluate the model before showing its output</dt><dd>The liquids model found 232 of 340 positive test labels. The solids model missed all 29 positives and matched the majority-class baseline, so its predictions stay out of assessments.</dd></div>
+        <div><dt>Keep the deployment simple</dt><dd>Python prepares the pinned SafeChem data and model outputs at build time. Netlify serves the browser app, including search and downloads, without a separate Python service.</dd></div>
+      </dl>
+    </section>
+    <section class="panel" aria-labelledby="walkthrough-title">
+      <h2 id="walkthrough-title">60-second walkthrough</h2>
+      <video controls playsinline preload="metadata" aria-label="Captioned demonstration of Chemsafe AI">
+        <source src="/walkthrough.mp4" type="video/mp4">
+        <a href="/walkthrough.mp4">Download the walkthrough</a>
+      </video>
+      <details>
+        <summary>Walkthrough transcript</summary>
+        <ol class="transcript">
+          <li><strong>0:00</strong> Open the public assessment page. The catalog contains 32,211 SafeChem records.</li>
+          <li><strong>0:08</strong> Search CAS <code>64-17-6</code>. The check rejects the mistyped number.</li>
+          <li><strong>0:18</strong> Search CAS <code>64-17-5</code> and confirm the ethyl alcohol record.</li>
+          <li><strong>0:31</strong> Review the source revision and recorded labels, then download the assessment PDF. CSV remains available.</li>
+          <li><strong>0:45</strong> Open Model results. The solids model found zero of 29 positive test labels, so the app withholds its prediction.</li>
+        </ol>
+      </details>
+    </section>
+  </main>
+  <footer class="shell footer"><strong>Chemsafe AI</strong><a href="/#assessment">Open the live app</a><a href="https://github.com/murali0502/Chemsafe-AI">GitHub repository</a></footer>
+</body>
+</html>

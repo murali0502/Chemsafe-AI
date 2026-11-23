@@ -1,0 +1,8 @@
+{
+  "name": "chemsafe-ai",
+  "private": true,
+  "description": "Browser dependencies for the Chemsafe AI Netlify site",
+  "dependencies": {
+    "jspdf": "4.2.1"
+  }
+}
