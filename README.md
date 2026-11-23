@@ -45,7 +45,27 @@ Run the application:
 
     streamlit run app.py
 
-## Deployment
+## Netlify deployment
+
+Netlify serves a static browser app from `netlify-dist/`. The build
+downloads the pinned SafeChem dataset, trains the same models, and
+generates the catalog, liquids scores, and evaluation metrics ahead of
+time. Published pages need no separate Python server.
+
+Connect this repository's `main` branch to a project in your Netlify
+team. Netlify reads the build command and output path from
+`netlify.toml`. For a local preview, install the dependencies and run:
+
+    python prepare_data.py
+    python train_model.py
+    python build_netlify.py
+    python -m http.server 8000 --directory netlify-dist
+
+The generated catalog selects fields and adds model outputs to the
+[SafeChem dataset](https://huggingface.co/datasets/Anonymous-07/SafeChem)
+under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+## Streamlit deployment
 
 Railway builds from the repository's Dockerfile. The image downloads
 the pinned SafeChem splits and trains both models at build time.

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a1022">
+  <meta name="description" content="Look up recorded chemical flammability evidence in SafeChem.">
+  <title>Chemsafe AI · Chemical assessments</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" type="module"></script>
+</head>
+<body>
+  <a href="#main" class="skip">Skip to content</a>
+  <header class="top">
+    <div class="shell top-inner">
+      <a class="brand" href="#assessment"><span class="mark" aria-hidden="true">Cs</span> Chemsafe <span>AI</span></a>
+      <nav aria-label="Main navigation">
+        <a href="#assessment">Assessment</a>
+        <a href="#models">Model results</a>
+        <a href="#explore">Explore data</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="shell">
+    <p id="catalog-status" class="status" role="status">Loading the SafeChem catalog…</p>
+
+    <section id="assessment" class="view" aria-labelledby="assessment-title">
+      <div class="hero">
+        <div class="hero-copy">
+          <h1 id="assessment-title">Chemical<br>assessments<span>.</span></h1>
+          <p>Find a substance, confirm its identity, and review recorded flammability evidence from SafeChem.</p>
+        </div>
+        <div class="orbit-art" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
+      </div>
+      <section class="panel search-panel" aria-labelledby="search-title">
+        <h2 id="search-title">Find a substance</h2>
+        <form id="search-form" class="search-row" role="search">
+          <label for="query">Chemical name, IUPAC name, or CAS number</label>
+          <input id="query" type="search" placeholder="Ethanol or 64-17-5" required>
+          <button class="primary" type="submit" disabled>Search</button>
+        </form>
+        <div class="examples"><span>Try</span><button type="button" disabled data-example="ethanol">Ethanol</button><button type="button" disabled data-example="67-56-1">67-56-1</button><button type="button" disabled data-example="acetone">Acetone</button></div>
+      </section>
+      <div class="notice"><strong>Research prototype</strong><p>Verify the exact product against its current Safety Data Sheet (SDS) before making safety decisions.</p></div>
+      <p id="search-status" role="status"></p>
+      <div id="matches" hidden></div>
+      <div id="assessment-result" hidden></div>
+      <dl id="catalog-stats" class="stats"></dl>
+    </section>
+
+    <section id="models" class="view subpage" hidden aria-labelledby="models-title">
+      <h1 id="models-title">Model results</h1>
+      <p class="intro">Compare random forests with a majority-class baseline on SafeChem test labels.</p>
+      <div id="models-content"></div>
+    </section>
+
+    <section id="explore" class="view subpage" hidden aria-labelledby="explore-title">
+      <h1 id="explore-title">Explore data</h1>
+      <p class="intro">Filter the SafeChem catalog and download the matching records.</p>
+      <div class="panel filters">
+        <label for="filter-query">Substance or CAS<input id="filter-query" type="search" placeholder="Filter by name or CAS"></label>
+        <label for="filter-split">Dataset split<select id="filter-split"><option value="">All splits</option><option>train</option><option>validation</option><option>test</option></select></label>
+        <label for="filter-hazard">Recorded hazard<select id="filter-hazard"><option value="">Any label</option><option value="flammable_liquids">Flammable liquids</option><option value="flammable_solids">Flammable solids</option></select></label>
+      </div>
+      <p id="filter-status" role="status"></p>
+      <div class="table-wrap"><table><thead><tr><th>Substance</th><th>CAS</th><th>Formula</th><th>Liquid</th><th>Solid</th><th>Split</th></tr></thead><tbody id="dataset-rows"></tbody></table></div>
+      <p class="muted">Label 1 means a recorded positive. A zero label is not proof of nonflammability.</p>
+      <div class="actions"><button id="previous" type="button">Previous</button><button id="next" type="button">Next</button><button id="export-records" type="button" class="primary">Download filtered CSV</button></div>
+    </section>
+  </main>
+  <footer class="shell footer"><strong>Chemsafe AI</strong><span>Dataset · <a id="dataset-link" href="https://huggingface.co/datasets/Anonymous-07/SafeChem">SafeChem</a> · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a></span><a href="https://github.com/murali0502/Chemsafe-AI">Source on GitHub</a></footer>
+</body>
+</html>

@@ -1,0 +1,11 @@
+"$schema" = "https://open-api.netlify.com/netlify.schema.json"
+
+[build]
+command = "python -m pip install -r requirements.txt && python prepare_data.py && python train_model.py && python build_netlify.py"
+publish = "netlify-dist"
+
+[[headers]]
+for = "/*"
+  [headers.values]
+  X-Content-Type-Options = "nosniff"
+  Referrer-Policy = "strict-origin-when-cross-origin"

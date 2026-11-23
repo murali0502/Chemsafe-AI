@@ -10,3 +10,6 @@ models/
 # Earlier architecture, not used by the current Streamlit MVP
 backend/
 frontend/
+
+.netlify/
+netlify-dist/
