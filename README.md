@@ -1,121 +1,71 @@
 # Chemsafe AI
 
-[Live app](https://chemsafe-ai.netlify.app/) · [Portfolio case study](https://chemsafe-ai.netlify.app/case-study.html)
+Chemsafe AI is a portfolio project for reviewing recorded chemical flammability evidence. Search 32,211 SafeChem records by name, IUPAC name, or CAS number, confirm the substance, and download an assessment that includes the source revision.
 
-Chemical Flammability Intelligence Platform built with Streamlit,
-pandas, and scikit-learn.
+[Live app](https://chemsafe-ai.netlify.app/) · [Portfolio case study and 60-second walkthrough](https://chemsafe-ai.netlify.app/case-study.html)
 
-## Features
+## Try the demo
 
-- Chemical search by recorded name, IUPAC name, or CAS number with record confirmation
-- SafeChem dataset explorer with split and recorded-hazard filters, pagination, and CSV export
-- Recorded flammable-liquid and flammable-solid hazard labels
-- Baseline machine-learning models
-- Model evaluation dashboard with test metrics, baseline comparison, and split audit
-- Downloadable assessment reports
+1. Search for `64-17-6` to see how the app catches a mistyped CAS check digit.
+2. Search for `64-17-5` or `ethanol` and confirm the **ETHYL ALCOHOL** record.
+3. Review the recorded liquid and solid labels, then download the PDF or CSV assessment. Open **Model results** to see how both models performed on the SafeChem test split.
 
-## Technology
+## What the app does
 
-- Python
-- Streamlit
-- pandas
-- scikit-learn
-- SafeChem dataset from Hugging Face
+- **Substance lookup.** CAS searches validate the check digit and require an exact match. When records for the same CAS disagree, the app asks which source record to use.
+- **Evidence and reports.** The assessment shows the recorded labels and dataset revision. The PDF and CSV include the selected manufacturer Safety Data Sheet (SDS) when available.
+- **Dataset explorer.** Browse records, filter by dataset split or recorded hazard label, and export the full filtered result set as CSV.
+- **Model evaluation.** Compare two random forests with a majority-class baseline. The dashboard shows class counts, confusion matrices, and shared CAS identifiers and InChI keys across data splits.
 
-## Setup
+## How it works
 
-Install dependencies:
+Python downloads and validates a pinned SafeChem revision, trains the scikit-learn models, then generates the static catalog and metrics. The Netlify app uses HTML, CSS, and JavaScript for search and reports. jsPDF creates PDFs in the browser. The live site runs without a Python server.
 
-    pip install -r requirements.txt
+| Path | Purpose |
+| --- | --- |
+| `site/` | Browser app, PDF generator, and portfolio case study |
+| `prepare_data.py` | Download and validate the pinned SafeChem splits |
+| `train_model.py` | Train and evaluate the liquid and solid classifiers |
+| `build_netlify.py` | Build the static site and catalog in `netlify-dist/` |
+| `sds_catalog.json` | Public-approved manufacturer SDS entries |
+| `netlify.toml` | Netlify build command and publish directory |
 
-From the repository root, download and validate the SafeChem splits:
+## Run locally
 
-    python prepare_data.py
+Use Python 3.11 and Node.js with npm. From the repository root, run:
 
-The script downloads the original CSV files from a pinned
-[SafeChem revision](https://huggingface.co/datasets/Anonymous-07/SafeChem/tree/43fa095c6020ad0a34f2c34301e83b29aa11ce05)
-and writes `data/safechem_train.csv`, `data/safechem_validation.csv`, and
-`data/safechem_test.csv`. It validates all three files before replacing
-any existing CSVs with those names. The script uses the Python standard
-library and requires an internet connection.
+```bash
+npm ci
+python -m pip install -r requirements.txt
+python prepare_data.py
+python train_model.py
+python build_netlify.py
+python -m http.server 8000 --directory netlify-dist
+```
 
-Train models:
+Open [localhost:8000](http://localhost:8000). For the Streamlit version, run `python -m streamlit run app.py` after preparing the data and training the models.
 
-    python train_model.py
+## Deploy to Netlify
 
-Run the application:
+Connect the repository's `main` branch to a Netlify project. Netlify reads the build and publish settings from `netlify.toml`, and `runtime.txt` selects Python 3.11. For a manual deploy, publish the generated `netlify-dist/` directory.
 
-    streamlit run app.py
+## Add product SDS entries
 
-## Netlify deployment
+The public catalog starts empty. Add entries approved for public sharing to `sds_catalog.json` and rebuild. Each entry requires `cas_number`, `manufacturer`, `product_name`, `revision_date` in `YYYY-MM-DD` format, and an official HTTPS `sds_url`. The `product_code` field is optional.
 
-Netlify serves a static browser app from `netlify-dist/`. The build
-downloads the pinned SafeChem dataset, trains the same models, and
-generates the catalog, liquids scores, and evaluation metrics ahead of
-time. Published pages need no separate Python server.
+Check that each sheet matches the exact manufacturer and product and is the current revision before publishing it. Catalog entries are public.
 
-Assessment searches validate the CAS check digit and require an exact
-CAS match for numeric input. If records for the same CAS disagree on
-identity details or hazard labels, the user must select a source row.
-Experimental liquids scores are opt-in and withheld for those conflicts.
-A valid CAS check digit checks transcription only. Review the product's
-current SDS for any safety decision.
+## Model results and limitations
 
-Connect this repository's `main` branch to a project in your Netlify
-team. Netlify reads the build command and output path from
-`netlify.toml`. For a local preview, install the Python dependencies and run:
+| Model | Positive labels detected | Positive recall | Balanced accuracy |
+| --- | ---: | ---: | ---: |
+| Flammable liquids | 232 of 340 | 68.2% | 82.8% |
+| Flammable solids | 0 of 29 | 0.0% | 50.0% |
 
-    npm ci
-    python prepare_data.py
-    python train_model.py
-    python build_netlify.py
-    python -m http.server 8000 --directory netlify-dist
+These figures measure agreement with SafeChem test labels. The liquids prediction is experimental and opt-in. The solids model matched the majority-class baseline on balanced accuracy, so the app withholds its predictions from assessments. Recorded solids labels remain available.
 
-The generated catalog selects fields and adds model outputs to the
-[SafeChem dataset](https://huggingface.co/datasets/Anonymous-07/SafeChem)
-under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Chemsafe AI is a research prototype. Check the exact product against its current SDS before making a safety decision.
 
-### Product SDS catalog and assessment PDFs
+## Data attribution
 
-Add only public-approved manufacturer SDS entries to `sds_catalog.json`.
-Each entry has `cas_number`, `manufacturer`, `product_name`, an optional
-`product_code`, an ISO `revision_date` such as `YYYY-MM-DD`, and an
-official HTTPS `sds_url`. Entries are published to the browser, so keep
-private document URLs and client information out of this file. The tool
-checks identifiers and dates at build time. A person should verify that
-each sheet matches the exact product and is the current revision.
-
-The browser generates an evidence-only PDF containing the recorded
-labels, dataset revision, and selected manufacturer sheet when available.
-The assessment and dataset CSV exports remain available.
-
-## Streamlit deployment
-
-Railway builds from the repository's Dockerfile. The image downloads
-the pinned SafeChem splits and trains both models at build time.
-The service listens on Railway's assigned port and checks
-`/_stcore/health` before serving traffic.
-
-To build and run the same image locally:
-
-    docker build -t chemsafe-ai .
-    docker run --rm -p 8080:8080 chemsafe-ai
-
-## Model evaluation
-
-The training command compares each random forest with a majority-class
-baseline on the supplied test split. It reports class counts and checks
-for shared CAS identifiers and InChI keys across the available splits.
-The validation split is included in the audit. The default model
-settings are fixed.
-
-The flammable-solids model missed all 29 positive test labels in the
-pinned dataset. The app shows its results on the Model performance page
-and withholds its predictions from assessments and CSV exports. Recorded
-SafeChem solids labels remain available after record confirmation.
-
-## Limitations
-
-This is a research prototype. Model predictions reproduce dataset labels
-and are not certified chemical safety determinations. Verify the exact
-substance or product against authoritative safety documentation.
+The app uses a pinned snapshot of SafeChem from Anonymous-07. The browser catalog selects source fields and adds model outputs. [Pinned dataset revision](https://huggingface.co/datasets/Anonymous-07/SafeChem/tree/43fa095c6020ad0a34f2c34301e83b29aa11ce05) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
