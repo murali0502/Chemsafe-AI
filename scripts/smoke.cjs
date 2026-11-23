@@ -32,7 +32,11 @@ async function main() {
     assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
     assert(pdf.includes(Buffer.from("partNumber=A4094")));
 
-    const fixture = await (await page.request.get(new URL("catalog.json", url).href)).json();
+    const fixture = await page.evaluate(async () => {
+      const response = await fetch("./catalog.json");
+      if (!response.ok) throw new Error(`Catalog request returned ${response.status}`);
+      return response.json();
+    });
     const index = (field) => fixture.fields.indexOf(field);
     const evidence = fixture.rows.find((row) => row[index("cas_number")] === "000064-17-5");
     assert(evidence);
