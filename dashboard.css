@@ -1,0 +1,138 @@
+:root {
+    --cs-panel: #111e30;
+    --cs-line: #2a3b52;
+    --cs-muted: #a6b7cb;
+    --cs-mint: #65e8c3;
+}
+
+[data-testid="stHeader"] {
+    background: #0a1220;
+}
+
+[data-testid="stMainBlockContainer"] {
+    max-width: 76rem;
+    padding-top: 4.85rem;
+    padding-bottom: 2.5rem;
+}
+
+.st-key-app_bar {
+    border-bottom: 1px solid var(--cs-line);
+    padding-bottom: .55rem;
+}
+
+.st-key-app_bar [data-testid="stRadio"] label p {
+    font-weight: 600;
+}
+
+.cs-brand {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    font-size: 1.22rem;
+    font-weight: 750;
+    letter-spacing: -.035em;
+}
+
+.cs-mark {
+    display: grid;
+    width: 2.1rem;
+    height: 2.1rem;
+    place-items: center;
+    border: 1px solid #3c8a79;
+    border-radius: .65rem;
+    background: #173b3b;
+    color: var(--cs-mint);
+    font: 700 .73rem ui-monospace, monospace;
+    letter-spacing: 0;
+}
+
+.cs-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: linear-gradient(115deg, #14283d 0%, #11263a 58%, #143732 100%);
+    border: 1px solid #31546a;
+    border-radius: 1.25rem;
+    padding: clamp(1.4rem, 5vw, 3.7rem);
+}
+
+.cs-hero::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0 0 0 48%;
+    background: radial-gradient(circle, #74eac35c 1px, transparent 1.6px) 0 0 / 20px 20px;
+    mask-image: linear-gradient(90deg, transparent, #000 85%);
+    opacity: .65;
+}
+
+.cs-hero h1 {
+    color: #f3f9ff;
+    font-size: clamp(2.2rem, 5.3vw, 4.25rem);
+    font-weight: 760;
+    letter-spacing: -.06em;
+    line-height: 1.03;
+    margin: 0 0 .85rem;
+    padding: 0;
+}
+
+.cs-hero p {
+    max-width: 35rem;
+    color: #bed1df;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.st-key-search_panel, .st-key-identity_panel, .st-key-evidence_panel,
+.st-key-prediction_panel, .st-key-explorer_filters, .st-key-performance_summary {
+    background: var(--cs-panel);
+    border: 1px solid var(--cs-line);
+    border-radius: 1rem;
+    padding: clamp(.95rem, 2.4vw, 1.55rem);
+}
+
+[data-testid="stMetric"] {
+    min-width: 0;
+}
+
+[data-testid="stMetricValue"] {
+    color: #e6f7fd;
+    font-variant-numeric: tabular-nums;
+}
+
+[data-testid="stCaptionContainer"] {
+    color: var(--cs-muted);
+}
+
+[data-testid="stDownloadButton"] button {
+    border-color: #3c8a79;
+}
+
+.cs-footer {
+    border-top: 1px solid var(--cs-line);
+    color: var(--cs-muted);
+    font-size: .84rem;
+    padding-top: 1rem;
+}
+
+@media (max-width: 640px) {
+    [data-testid="stMainBlockContainer"] {
+        padding: 4.3rem .9rem 2rem;
+    }
+
+    .cs-hero::after {
+        opacity: .35;
+    }
+}
+
+button[data-testid="stBaseButton-primary"],
+button[data-testid="stBaseButton-primaryFormSubmit"] {
+    color: #07251e;
+    font-weight: 700;
+}
+
+button[data-testid="stBaseButton-primary"]:hover,
+button[data-testid="stBaseButton-primaryFormSubmit"]:hover {
+    color: #07251e;
+    background: #a1f4db;
+}

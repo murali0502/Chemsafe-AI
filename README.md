@@ -6,10 +6,10 @@ pandas, and scikit-learn.
 ## Features
 
 - Chemical search by recorded name, IUPAC name, or CAS number with record confirmation
-- SafeChem dataset exploration
+- SafeChem dataset explorer with split and recorded-hazard filters, pagination, and CSV export
 - Recorded flammable-liquid and flammable-solid hazard labels
 - Baseline machine-learning models
-- Model evaluation metrics
+- Model evaluation dashboard with test metrics, baseline comparison, and split audit
 - Downloadable assessment reports
 
 ## Technology

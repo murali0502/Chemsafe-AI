@@ -12,9 +12,10 @@ st.set_page_config(
     page_title="Chemsafe AI",
     page_icon="🧪",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
+ROOT = Path(__file__).resolve().parent
 DATA = Path("data")
 MODELS = Path("models")
 
@@ -44,7 +45,7 @@ CONFLICT_NOTICE = (
 ZERO_RECALL_NOTICE = "This model detected zero positive labels in its test evaluation."
 SOLIDS_NOTICE = (
     "The solids prediction is withheld because the model missed all positive test labels. "
-    "See Model performance for the evaluation."
+    "See Model results for the evaluation."
 )
 
 
@@ -116,10 +117,22 @@ def predict_liquids(record, model):
     return prediction, positive_score
 
 
-st.title("🧪 Chemsafe AI")
-st.caption("Chemical Flammability Intelligence Platform")
+st.html(ROOT / "dashboard.css")
 
-st.warning(SAFETY_NOTICE)
+with st.container(key="app_bar", horizontal=True, vertical_alignment="center"):
+    st.html('<div class="cs-brand"><span class="cs-mark" aria-hidden="true">CS</span> Chemsafe AI</div>')
+    navigation = {
+        "Chemical assessment": "Assessment",
+        "Model performance": "Model results",
+        "Dataset explorer": "Explore data",
+    }
+    page = st.radio(
+        "Navigation",
+        list(navigation),
+        format_func=navigation.__getitem__,
+        horizontal=True,
+        label_visibility="collapsed",
+    )
 
 try:
     file_versions = []
@@ -128,8 +141,10 @@ try:
         if path.exists():
             file_versions.append((split, path, path.stat().st_mtime_ns))
     df = load_data(file_versions)
-except Exception as exc:
+except (OSError, ValueError) as exc:
+    st.title("Prepare the SafeChem dataset")
     st.error(f"Dataset loading failed: {exc}")
+    st.code("python prepare_data.py", language="bash")
     st.stop()
 
 liquids_path = (MODELS / "flammable_liquids.joblib").resolve()
@@ -145,24 +160,36 @@ metrics = (
     else {}
 )
 
-with st.sidebar:
-    st.header("Project overview")
-    st.metric("Loaded records", f"{len(df):,}")
-    st.metric("Unique CAS identifiers", f"{df.loc[df['_cas'] != '', '_cas'].nunique():,}")
-    st.caption("Dataset: Anonymous-07/SafeChem")
-
-    page = st.radio(
-        "Navigation",
-        ["Chemical assessment", "Model performance", "Dataset explorer"],
-    )
-
 if page == "Chemical assessment":
-    st.header("Search a chemical")
-
-    query = st.text_input(
-        "Chemical name, IUPAC name, or CAS number",
-        placeholder="e.g. ethanol or 64-17-5",
+    st.html(
+        '<section class="cs-hero"><h1>Chemical assessments</h1>'
+        '<p>Find a substance, confirm its identity, and review the flammability '
+        'evidence recorded in SafeChem.</p></section>'
     )
+
+    if "assessment_draft" not in st.session_state:
+        st.session_state["assessment_draft"] = st.session_state.get("assessment_query", "")
+    with st.container(key="search_panel"):
+        st.subheader("Find a substance")
+        with st.form("assessment_search", border=False):
+            field, action = st.columns([5, 1], vertical_alignment="center")
+            draft_query = field.text_input(
+                "Chemical name, IUPAC name, or CAS number",
+                placeholder="Search ethanol or 64-17-5",
+                key="assessment_draft",
+                label_visibility="collapsed",
+            )
+            if action.form_submit_button("Search", type="primary", width="stretch"):
+                st.session_state["assessment_query"] = draft_query
+        with st.container(key="search_examples", horizontal=True, vertical_alignment="center"):
+            st.caption("Examples", width="content")
+            for example in ("Ethanol", "67-56-1", "Acetone"):
+                if st.button(example, on_click=st.session_state.__setitem__,
+                             args=("assessment_draft", example)):
+                    st.session_state["assessment_query"] = example
+        query = st.session_state.get("assessment_query", "")
+
+    st.warning(SAFETY_NOTICE)
 
     if query.strip():
         term = query.strip().casefold()
@@ -189,14 +216,22 @@ if page == "Chemical assessment":
             )
         else:
             groups = results.groupby(["_name", "_cas"], sort=False).indices
+            st.caption(
+                f"{len(groups):,} {'exact' if exact.any() else 'partial'} "
+                f"{'match' if len(groups) == 1 else 'matches'}"
+            )
             selection = st.selectbox(
-                "Select the intended record",
+                "Matching substances",
                 list(groups),
+                index=0 if len(groups) == 1 else None,
+                placeholder="Choose a substance to review",
                 format_func=lambda key: (
                     f"{results.iloc[groups[key][0]]['primary_name']} | "
                     f"CAS: {results.iloc[groups[key][0]]['cas_number']}"
                 ),
             )
+            if selection is None:
+                st.stop()
             matches = results.iloc[groups[selection]]
             label_summaries = matches.reindex(columns=list(TARGETS)).apply(
                 lambda column: column.map(recorded_label)
@@ -216,85 +251,89 @@ if page == "Chemical assessment":
                 index = st.selectbox("Choose a source record", list(choices), format_func=choices.get)
                 record = matches.loc[index]
 
-            st.subheader(record["primary_name"])
-            c1, c2, c3 = st.columns(3)
-            c1.metric("CAS number", record["cas_number"] or "Unavailable")
-            c2.metric(
-                "Formula",
-                str(record.get("molecular_formula"))
-                if available(record.get("molecular_formula"))
-                else "Unavailable",
-            )
-            c3.metric(
-                "Molecular weight",
-                str(record.get("molecular_weight"))
-                if available(record.get("molecular_weight"))
-                else "Unavailable",
-            )
+            with st.container(key="identity_panel"):
+                st.subheader(record["primary_name"])
+                c1, c2, c3 = st.columns(3)
+                c1.metric("CAS number", record["cas_number"] or "Unavailable")
+                c2.metric(
+                    "Formula",
+                    str(record.get("molecular_formula"))
+                    if available(record.get("molecular_formula"))
+                    else "Unavailable",
+                )
+                c3.metric(
+                    "Molecular weight",
+                    str(record.get("molecular_weight"))
+                    if available(record.get("molecular_weight"))
+                    else "Unavailable",
+                )
 
-            if available(record.get("iupac_name")):
-                st.write(f"**IUPAC name** · {record['iupac_name']}")
-            if not st.checkbox(
-                "I confirm this is the intended substance record",
-                key=f"confirm_{term}_{record.name}_{file_versions}",
-            ):
+                if available(record.get("iupac_name")):
+                    st.write(f"**IUPAC name** · {record['iupac_name']}")
+                confirmed = st.checkbox(
+                    "I confirm this is the intended substance record",
+                    key=f"confirm_{term}_{record.name}_{file_versions}",
+                )
+            if not confirmed:
                 st.stop()
 
-            st.subheader("Recorded SafeChem labels")
-            split = record["dataset_split"]
-            if record["dataset_revision"] == REVISION:
-                source_url = f"https://huggingface.co/datasets/Anonymous-07/SafeChem/tree/{REVISION}"
-                st.caption(f"Source · [SafeChem]({source_url}) · {split} split")
-            else:
-                st.caption(f"Source · Local {split} CSV · Dataset revision unverified")
-            for target, label in TARGETS.items():
-                value = record.get(target)
-                status = recorded_label(value)
-                st.write(f"**{label}:** {status}")
-
-            st.caption(ZERO_LABEL_NOTICE)
-
-            st.subheader("Machine-learning predictions")
-            st.info(SOLIDS_NOTICE)
-            if liquids_model is None:
-                st.info("Run `python train_model.py` to enable the liquids prediction.")
-            else:
-                prediction, positive_score = predict_liquids(record, liquids_model)
-                st.markdown("**Flammable liquids**")
-                if prediction == 1:
-                    st.error("Model predicts positive label")
+            with st.container(key="evidence_panel"):
+                st.subheader("Recorded hazard labels")
+                split = record["dataset_split"]
+                if record["dataset_revision"] == REVISION:
+                    source_url = f"https://huggingface.co/datasets/Anonymous-07/SafeChem/tree/{REVISION}"
+                    st.caption(f"Source · [SafeChem]({source_url}) · {split} split · revision `{REVISION[:8]}`")
                 else:
-                    st.info("Model predicts negative label")
-                if positive_score is not None:
-                    st.write(f"Model positive-class score · {positive_score:.1%}")
-                st.caption(SCORE_NOTICE)
-                if metrics.get("flammable_liquids", {}).get("positive_recall") == 0:
-                    st.warning(ZERO_RECALL_NOTICE)
+                    st.caption(f"Source · Local {split} CSV · Dataset revision unverified")
+                for column, (target, label) in zip(st.columns(2), TARGETS.items()):
+                    with column:
+                        status = recorded_label(record.get(target))
+                        st.markdown(f"**{label}**")
+                        if status == "Positive hazard label recorded":
+                            st.warning(status, icon=":material/warning:")
+                        else:
+                            st.info(status)
+                st.caption(ZERO_LABEL_NOTICE)
 
-            st.subheader("Available properties")
-            properties = [
-                ("flash_point", "Flash point (source text)"),
-                ("boiling_point", "Boiling point (source text)"),
-                ("canonical_smiles", "Canonical SMILES"),
-                ("inchi_key", "InChI Key"),
-                ("xlogp", "XLogP"),
-                ("tpsa", "TPSA"),
-            ]
+            with st.container(key="prediction_panel"):
+                st.subheader("Experimental model")
+                st.caption(SOLIDS_NOTICE)
+                if liquids_model is None:
+                    st.info("Run `python train_model.py` to enable the liquids prediction.")
+                else:
+                    prediction, positive_score = predict_liquids(record, liquids_model)
+                    st.markdown("**Flammable liquids**")
+                    st.write("Predicted positive label" if prediction == 1 else "Predicted negative label")
+                    if positive_score is not None:
+                        st.progress(positive_score, text=f"Positive-class score · {positive_score:.1%}")
+                    st.caption(SCORE_NOTICE)
+                    if metrics.get("flammable_liquids", {}).get("positive_recall") == 0:
+                        st.warning(ZERO_RECALL_NOTICE)
 
-            for key, label in properties:
-                value = record.get(key)
-                if available(value):
-                    st.write(f"**{label}:** {value}")
+            with st.expander("Molecular properties and identifiers"):
+                properties = [
+                    ("flash_point", "Flash point (source text)"),
+                    ("boiling_point", "Boiling point (source text)"),
+                    ("canonical_smiles", "Canonical SMILES"),
+                    ("inchi_key", "InChI Key"),
+                    ("xlogp", "XLogP"),
+                    ("tpsa", "TPSA"),
+                ]
 
-            if available(record.get("cid")):
-                try:
-                    cid = int(float(record["cid"]))
-                    st.link_button(
-                        "Open PubChem",
-                        f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}",
-                    )
-                except (ValueError, TypeError, OverflowError):
-                    pass
+                for key, label in properties:
+                    value = record.get(key)
+                    if available(value):
+                        st.write(f"**{label}:** {value}")
+
+                if available(record.get("cid")):
+                    try:
+                        cid = int(float(record["cid"]))
+                        st.link_button(
+                            "Open PubChem",
+                            f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}",
+                        )
+                    except (ValueError, TypeError, OverflowError):
+                        pass
 
             report = {
                 "chemical_name": record["primary_name"],
@@ -326,39 +365,47 @@ if page == "Chemical assessment":
                 pd.DataFrame([report]).to_csv(index=False).encode("utf-8"),
                 file_name="chemsafe_assessment.csv",
                 mime="text/csv",
+                type="primary",
             )
-
     else:
-        st.write(
-            "Enter a chemical name or CAS number to inspect its recorded "
-            "hazard labels and available ML predictions."
-        )
-        st.subheader("What this app provides")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Chemical records", f"{len(df):,}")
-        c2.metric("Hazard targets", len(TARGETS))
-        c3.metric("AI API required", "No")
+        records, identifiers, splits = st.columns(3)
+        records.metric("SafeChem records", f"{len(df):,}", border=True)
+        identifiers.metric("CAS identifiers", f"{df.loc[df['_cas'] != '', '_cas'].nunique():,}", border=True)
+        splits.metric("Dataset splits", df["dataset_split"].nunique(), border=True)
 
 elif page == "Model performance":
-    st.header("Model evaluation")
-    st.write(
-        "These metrics measure agreement with SafeChem test labels, not "
-        "independently verified real-world flammability."
-    )
+    st.title("Model performance")
+    st.write("Compare the random forests with the majority-class baseline on SafeChem test labels.")
+    st.caption("These metrics measure agreement with dataset labels. Consult a current SDS for safety decisions.")
 
     if not metrics:
         st.info("Run `python train_model.py` to generate model metrics.")
     else:
-        if "split_overlap" in metrics:
-            st.subheader("Shared identifiers across dataset splits")
-            st.dataframe([
-                {
-                    "Splits": " / ".join(pair["splits"]),
-                    "Shared CAS identifiers": pair["cas_number"],
-                    "Shared InChI keys": pair["inchi_key"],
-                }
-                for pair in metrics["split_overlap"]
-            ], hide_index=True)
+        comparison = []
+        for target, label in TARGETS.items():
+            result = metrics.get(target, {})
+            baseline = result.get("majority_baseline")
+            if baseline:
+                for series, scores in (("Random forest", result), ("Majority class", baseline)):
+                    comparison.append({
+                        "Hazard label": label,
+                        "Model": series,
+                        "Balanced accuracy (%)": 100 * scores["test_balanced_accuracy"],
+                        "Positive recall (%)": 100 * scores["positive_recall"],
+                    })
+        if comparison:
+            with st.container(key="performance_summary"):
+                st.subheader("Test-set comparison")
+                score = st.radio(
+                    "Metric to compare",
+                    ["Positive recall (%)", "Balanced accuracy (%)"],
+                    horizontal=True,
+                )
+                st.bar_chart(
+                    pd.DataFrame(comparison),
+                    x="Hazard label", y=score, color="Model",
+                    stack=False, height=260,
+                )
 
         for target, label in TARGETS.items():
             if target not in metrics:
@@ -387,45 +434,99 @@ elif page == "Model performance":
             if result["positive_recall"] == 0:
                 st.warning(ZERO_RECALL_NOTICE)
 
-            st.write("Confusion matrix: `[[TN, FP], [FN, TP]]`")
-            st.write(result["confusion_matrix_labels_0_1"])
+            with st.expander(f"{label} · Confusion matrix and classification report"):
+                st.dataframe(
+                    pd.DataFrame(
+                        result["confusion_matrix_labels_0_1"],
+                        index=["Recorded negative", "Recorded positive"],
+                        columns=["Predicted negative", "Predicted positive"],
+                    )
+                )
+                st.json(result["classification_report"])
 
-            st.json(result["classification_report"])
+        if "split_overlap" in metrics:
+            st.subheader("Shared identifiers across dataset splits")
+            st.dataframe([
+                {
+                    "Splits": " / ".join(pair["splits"]),
+                    "Shared CAS identifiers": pair["cas_number"],
+                    "Shared InChI keys": pair["inchi_key"],
+                }
+                for pair in metrics["split_overlap"]
+            ], hide_index=True)
 
 elif page == "Dataset explorer":
-    st.header("Dataset explorer")
-    st.write("Browse the records loaded from the three supplied CSV splits.")
+    st.title("Dataset explorer")
+    st.write("Filter SafeChem records and export your selection.")
 
-    search = st.text_input("Filter by name or CAS")
+    with st.container(key="explorer_filters"):
+        search = st.text_input("Chemical name, IUPAC name, or CAS", key="explorer_query")
+        split_column, hazard_column = st.columns(2)
+        splits = split_column.multiselect("Dataset splits", df["dataset_split"].unique().tolist())
+        hazard = hazard_column.selectbox(
+            "Recorded positive hazard label",
+            ["Any", *TARGETS],
+            format_func=lambda value: TARGETS.get(value, value),
+        )
+
     view = df
-
     if search.strip():
         term = search.strip().casefold()
-        view = df[
-            df["_name"].str.contains(term, regex=False, na=False)
-            | df["_cas"].str.contains(normalize_cas(term), regex=False, na=False)
-            | df["cas_number"].str.contains(term, case=False, regex=False, na=False)
+        view = view[
+            view["_name"].str.contains(term, regex=False, na=False)
+            | view["_iupac"].str.contains(term, regex=False, na=False)
+            | view["_cas"].str.contains(normalize_cas(term), regex=False, na=False)
+            | view["cas_number"].str.contains(term, case=False, regex=False, na=False)
         ]
+    if splits:
+        view = view[view["dataset_split"].isin(splits)]
+    if hazard != "Any":
+        if hazard in view:
+            view = view[pd.to_numeric(view[hazard], errors="coerce").eq(1)]
+        else:
+            view = view.iloc[:0]
 
-    columns = [
-        "primary_name", "cas_number", "molecular_formula",
-        "molecular_weight", "flammable_liquids",
-        "flammable_solids", "flash_point", "dataset_split",
-    ]
-    columns = [c for c in columns if c in view.columns]
+    if view.empty:
+        st.info("No records match these filters.")
+    else:
+        columns = [
+            "primary_name", "cas_number", "molecular_formula",
+            "molecular_weight", "flammable_liquids", "flammable_solids",
+            "flash_point", "dataset_split",
+        ]
+        columns = [column for column in columns if column in view]
+        page_size = 100
+        page_count = (len(view) + page_size - 1) // page_size
+        current_page = 1
+        if page_count > 1:
+            current_page = st.number_input(
+                "Page", min_value=1, max_value=page_count,
+                key=f"explorer_page_{search}_{splits}_{hazard}",
+            )
+        offset = (current_page - 1) * page_size
+        st.caption(
+            f"Showing {offset + 1:,}–{min(offset + page_size, len(view)):,} of {len(view):,} matching records"
+        )
+        st.dataframe(
+            view[columns].iloc[offset:offset + page_size],
+            hide_index=True,
+            column_config={
+                "primary_name": "Substance",
+                "cas_number": "CAS number",
+                "molecular_formula": "Formula",
+                "molecular_weight": "Molecular weight",
+                "flammable_liquids": "Liquid label",
+                "flammable_solids": "Solid label",
+                "flash_point": "Flash point (source text)",
+                "dataset_split": "Split",
+            },
+        )
+        st.caption("Label 1 indicates a recorded positive. " + ZERO_LABEL_NOTICE)
+        st.download_button(
+            "Download filtered records",
+            view[columns].to_csv(index=False).encode("utf-8"),
+            file_name="chemsafe_filtered_records.csv",
+            mime="text/csv",
+        )
 
-    st.caption(f"{len(view):,} matching records")
-    st.dataframe(view[columns].head(500), use_container_width=True)
-
-    st.download_button(
-        "Download filtered records",
-        view[columns].to_csv(index=False).encode("utf-8"),
-        file_name="chemsafe_filtered_records.csv",
-        mime="text/csv",
-    )
-
-st.divider()
-st.caption(
-    "Chemsafe AI | SafeChem research prototype | "
-    "Verify current product-specific SDS before safety-critical use."
-)
+st.html('<footer class="cs-footer">Chemsafe AI · SafeChem research prototype</footer>')
