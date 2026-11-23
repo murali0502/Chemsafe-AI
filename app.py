@@ -6,7 +6,7 @@ import joblib
 import pandas as pd
 import streamlit as st
 
-from safechem_data import dataset_revision, normalize_cas
+from safechem_data import REVISION, dataset_revision, normalize_cas
 
 st.set_page_config(
     page_title="Chemsafe AI",
@@ -42,6 +42,10 @@ CONFLICT_NOTICE = (
     "SafeChem records with this name and CAS identifier disagree on the recorded hazard labels."
 )
 ZERO_RECALL_NOTICE = "This model detected zero positive labels in its test evaluation."
+SOLIDS_NOTICE = (
+    "The solids prediction is withheld because the model missed all positive test labels. "
+    "See Model performance for the evaluation."
+)
 
 
 @st.cache_data
@@ -61,27 +65,23 @@ def load_data(file_versions):
     result["primary_name"] = result["primary_name"].fillna("").astype(str)
     result["cas_number"] = result["cas_number"].fillna("").astype(str)
     result["_name"] = result["primary_name"].str.strip().str.casefold()
+    if "iupac_name" in result:
+        result["_iupac"] = result["iupac_name"].fillna("").astype(str).str.strip().str.casefold()
+    else:
+        result["_iupac"] = ""
     result["_cas"] = result["cas_number"].map(normalize_cas)
     return result
 
 
 @st.cache_resource
-def load_models():
-    loaded = {}
-    for target in TARGETS:
-        path = MODELS / f"{target}.joblib"
-        if path.exists():
-            loaded[target] = joblib.load(path)
-    return loaded
+def load_liquids_model(path, modified_ns):
+    return joblib.load(path)
 
 
 @st.cache_data
-def load_metrics():
-    path = MODELS / "metrics.json"
-    if path.exists():
-        with open(path) as file:
-            return json.load(file)
-    return {}
+def load_metrics(path, modified_ns):
+    with path.open() as file:
+        return json.load(file)
 
 
 def available(value):
@@ -104,33 +104,16 @@ def recorded_label(value):
     return "Unknown — unrecognized label"
 
 
-def predict_record(record, models):
+def predict_liquids(record, model):
     features = pd.DataFrame(
-        [[pd.to_numeric(record.get(f), errors="coerce") for f in FEATURES]],
+        [[pd.to_numeric(record.get(feature), errors="coerce") for feature in FEATURES]],
         columns=FEATURES,
     )
-    results = {}
-
-    for target, label in TARGETS.items():
-        if target not in models:
-            results[target] = None
-            continue
-
-        model = models[target]
-        prediction = int(model.predict(features)[0])
-        scores = model.predict_proba(features)[0]
-        classes = list(model.named_steps["classifier"].classes_)
-        positive_score = (
-            float(scores[classes.index(1)]) if 1 in classes else None
-        )
-
-        results[target] = {
-            "label": label,
-            "prediction": prediction,
-            "positive_score": positive_score,
-        }
-
-    return results
+    prediction = int(model.predict(features)[0])
+    scores = model.predict_proba(features)[0]
+    classes = list(model.named_steps["classifier"].classes_)
+    positive_score = float(scores[classes.index(1)]) if 1 in classes else None
+    return prediction, positive_score
 
 
 st.title("🧪 Chemsafe AI")
@@ -149,14 +132,23 @@ except Exception as exc:
     st.error(f"Dataset loading failed: {exc}")
     st.stop()
 
-models = load_models()
-metrics = load_metrics()
+liquids_path = (MODELS / "flammable_liquids.joblib").resolve()
+liquids_model = (
+    load_liquids_model(liquids_path, liquids_path.stat().st_mtime_ns)
+    if liquids_path.is_file()
+    else None
+)
+metrics_path = (MODELS / "metrics.json").resolve()
+metrics = (
+    load_metrics(metrics_path, metrics_path.stat().st_mtime_ns)
+    if metrics_path.is_file()
+    else {}
+)
 
 with st.sidebar:
     st.header("Project overview")
     st.metric("Loaded records", f"{len(df):,}")
     st.metric("Unique CAS identifiers", f"{df.loc[df['_cas'] != '', '_cas'].nunique():,}")
-    st.metric("Trained models available", f"{len(models)}/{len(TARGETS)}")
     st.caption("Dataset: Anonymous-07/SafeChem")
 
     page = st.radio(
@@ -168,22 +160,26 @@ if page == "Chemical assessment":
     st.header("Search a chemical")
 
     query = st.text_input(
-        "Chemical name or CAS number",
-        placeholder="e.g. ethyl alcohol or 64-17-5",
+        "Chemical name, IUPAC name, or CAS number",
+        placeholder="e.g. ethanol or 64-17-5",
     )
 
     if query.strip():
         term = query.strip().casefold()
-        exact = df[(df["_name"] == term) | (df["_cas"] == normalize_cas(term))]
-        results = exact
-
-        if results.empty:
-            contains = df[
+        cas_term = normalize_cas(term)
+        exact = df["_name"].eq(term) | df["_iupac"].eq(term) | df["_cas"].eq(cas_term)
+        if exact.any():
+            # Include companion rows even when only one carries the matched IUPAC name.
+            matching_keys = pd.MultiIndex.from_frame(df.loc[exact, ["_name", "_cas"]])
+            records = pd.MultiIndex.from_frame(df[["_name", "_cas"]])
+            results = df[records.isin(matching_keys)]
+        else:
+            results = df[
                 df["_name"].str.contains(term, regex=False, na=False)
-                | df["_cas"].str.contains(normalize_cas(term), regex=False, na=False)
+                | df["_iupac"].str.contains(term, regex=False, na=False)
+                | df["_cas"].str.contains(cas_term, regex=False, na=False)
                 | df["cas_number"].str.contains(term, case=False, regex=False, na=False)
             ]
-            results = contains
 
         if results.empty:
             st.error("No matching record found in SafeChem.")
@@ -236,7 +232,21 @@ if page == "Chemical assessment":
                 else "Unavailable",
             )
 
+            if available(record.get("iupac_name")):
+                st.write(f"**IUPAC name** · {record['iupac_name']}")
+            if not st.checkbox(
+                "I confirm this is the intended substance record",
+                key=f"confirm_{term}_{record.name}_{file_versions}",
+            ):
+                st.stop()
+
             st.subheader("Recorded SafeChem labels")
+            split = record["dataset_split"]
+            if record["dataset_revision"] == REVISION:
+                source_url = f"https://huggingface.co/datasets/Anonymous-07/SafeChem/tree/{REVISION}"
+                st.caption(f"Source · [SafeChem]({source_url}) · {split} split")
+            else:
+                st.caption(f"Source · Local {split} CSV · Dataset revision unverified")
             for target, label in TARGETS.items():
                 value = record.get(target)
                 status = recorded_label(value)
@@ -245,40 +255,24 @@ if page == "Chemical assessment":
             st.caption(ZERO_LABEL_NOTICE)
 
             st.subheader("Machine-learning predictions")
-            if not models:
-                st.info(
-                    "Models are not trained yet. Run "
-                    "`python train_model.py` in the terminal."
-                )
+            st.info(SOLIDS_NOTICE)
+            if liquids_model is None:
+                st.info("Run `python train_model.py` to enable the liquids prediction.")
             else:
-                predictions = predict_record(record, models)
-                cols = st.columns(2)
-
-                for col, (target, label) in zip(cols, TARGETS.items()):
-                    result = predictions[target]
-                    with col:
-                        st.markdown(f"**{label}**")
-                        if result is None:
-                            st.info("Model unavailable")
-                            continue
-                        elif result["prediction"] == 1:
-                            st.error("Model predicts positive label")
-                        else:
-                            st.info("Model predicts negative label")
-
-                        score = result["positive_score"]
-                        if score is not None:
-                            st.write(
-                                f"Model positive-class score: {score:.1%}"
-                            )
-
-                        st.caption(SCORE_NOTICE)
-                        if metrics.get(target, {}).get("positive_recall") == 0:
-                            st.warning(ZERO_RECALL_NOTICE)
+                prediction, positive_score = predict_liquids(record, liquids_model)
+                st.markdown("**Flammable liquids**")
+                if prediction == 1:
+                    st.error("Model predicts positive label")
+                else:
+                    st.info("Model predicts negative label")
+                if positive_score is not None:
+                    st.write(f"Model positive-class score · {positive_score:.1%}")
+                st.caption(SCORE_NOTICE)
+                if metrics.get("flammable_liquids", {}).get("positive_recall") == 0:
+                    st.warning(ZERO_RECALL_NOTICE)
 
             st.subheader("Available properties")
             properties = [
-                ("iupac_name", "IUPAC name"),
                 ("flash_point", "Flash point (source text)"),
                 ("boiling_point", "Boiling point (source text)"),
                 ("canonical_smiles", "Canonical SMILES"),
@@ -319,14 +313,13 @@ if page == "Chemical assessment":
                 report[f"recorded_{target}"] = record.get(target)
                 report[f"recorded_{target}_meaning"] = recorded_label(record.get(target))
 
-            if models:
+            report["model_evaluation_notice_flammable_solids"] = SOLIDS_NOTICE
+            if liquids_model is not None:
                 report["model_score_notice"] = SCORE_NOTICE
-                for target, result in predictions.items():
-                    if result:
-                        report[f"model_prediction_{target}"] = result["prediction"]
-                        report[f"model_positive_score_{target}"] = result["positive_score"]
-                        if metrics.get(target, {}).get("positive_recall") == 0:
-                            report[f"model_evaluation_notice_{target}"] = ZERO_RECALL_NOTICE
+                report["model_prediction_flammable_liquids"] = prediction
+                report["model_positive_score_flammable_liquids"] = positive_score
+                if metrics.get("flammable_liquids", {}).get("positive_recall") == 0:
+                    report["model_evaluation_notice_flammable_liquids"] = ZERO_RECALL_NOTICE
 
             st.download_button(
                 "Download assessment as CSV",

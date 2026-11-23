@@ -5,7 +5,7 @@ pandas, and scikit-learn.
 
 ## Features
 
-- Chemical search by name or CAS number
+- Chemical search by recorded name, IUPAC name, or CAS number with record confirmation
 - SafeChem dataset exploration
 - Recorded flammable-liquid and flammable-solid hazard labels
 - Baseline machine-learning models
@@ -54,8 +54,9 @@ The validation split is included in the audit. The default model
 settings are fixed.
 
 The flammable-solids model missed all 29 positive test labels in the
-pinned dataset. Check positive recall and balanced accuracy alongside
-overall accuracy when interpreting its results.
+pinned dataset. The app shows its results on the Model performance page
+and withholds its predictions from assessments and CSV exports. Recorded
+SafeChem solids labels remain available after record confirmation.
 
 ## Limitations
 
