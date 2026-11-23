@@ -45,6 +45,18 @@ Run the application:
 
     streamlit run app.py
 
+## Model evaluation
+
+The training command compares each random forest with a majority-class
+baseline on the supplied test split. It reports class counts and checks
+for shared CAS identifiers and InChI keys across the available splits.
+The validation split is included in the audit. The default model
+settings are fixed.
+
+The flammable-solids model missed all 29 positive test labels in the
+pinned dataset. Check positive recall and balanced accuracy alongside
+overall accuracy when interpreting its results.
+
 ## Limitations
 
 This is a research prototype. Model predictions reproduce dataset labels

@@ -6,8 +6,9 @@ import shutil
 from tempfile import TemporaryDirectory
 from urllib.request import urlopen
 
+from safechem_data import REVISION
+
 DATA = Path(__file__).resolve().parent / "data"
-REVISION = "43fa095c6020ad0a34f2c34301e83b29aa11ce05"
 SOURCE = f"https://huggingface.co/datasets/Anonymous-07/SafeChem/resolve/{REVISION}"
 SPLITS = {"train": "split_train.csv", "validation": "split_val.csv", "test": "split_test.csv"}
 REQUIRED_COLUMNS = {

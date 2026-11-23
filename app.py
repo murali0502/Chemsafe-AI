@@ -1,9 +1,12 @@
+from io import BytesIO
 from pathlib import Path
 import json
 
 import joblib
 import pandas as pd
 import streamlit as st
+
+from safechem_data import dataset_revision, normalize_cas
 
 st.set_page_config(
     page_title="Chemsafe AI",
@@ -28,15 +31,28 @@ TARGETS = {
 }
 
 
+SAFETY_NOTICE = (
+    "Research prototype only. Dataset labels and ML predictions are not "
+    "certified safety determinations. Verify the exact substance or product "
+    "against its current Safety Data Sheet (SDS)."
+)
+ZERO_LABEL_NOTICE = "A zero label is not proof of universal nonflammability."
+SCORE_NOTICE = "Model output is not a calibrated probability of real-world flammability."
+CONFLICT_NOTICE = (
+    "SafeChem records with this name and CAS identifier disagree on the recorded hazard labels."
+)
+ZERO_RECALL_NOTICE = "This model detected zero positive labels in its test evaluation."
+
+
 @st.cache_data
-def load_data():
+def load_data(file_versions):
     frames = []
-    for split in ["train", "validation", "test"]:
-        path = DATA / f"safechem_{split}.csv"
-        if path.exists():
-            part = pd.read_csv(path, low_memory=False)
-            part["dataset_split"] = split
-            frames.append(part)
+    for split, path, _mtime in file_versions:
+        contents = path.read_bytes()
+        part = pd.read_csv(BytesIO(contents), low_memory=False, dtype={"cas_number": str})
+        part["dataset_split"] = split
+        part["dataset_revision"] = dataset_revision(split, contents)
+        frames.append(part)
 
     if not frames:
         raise FileNotFoundError("No SafeChem CSV files found in data/")
@@ -44,8 +60,8 @@ def load_data():
     result = pd.concat(frames, ignore_index=True)
     result["primary_name"] = result["primary_name"].fillna("").astype(str)
     result["cas_number"] = result["cas_number"].fillna("").astype(str)
-    result["_name"] = result["primary_name"].str.casefold()
-    result["_cas"] = result["cas_number"].str.casefold()
+    result["_name"] = result["primary_name"].str.strip().str.casefold()
+    result["_cas"] = result["cas_number"].map(normalize_cas)
     return result
 
 
@@ -120,14 +136,15 @@ def predict_record(record, models):
 st.title("🧪 Chemsafe AI")
 st.caption("Chemical Flammability Intelligence Platform")
 
-st.warning(
-    "Research prototype only. Dataset labels and ML predictions are not "
-    "certified safety determinations. Verify the exact substance or product "
-    "against its current Safety Data Sheet (SDS)."
-)
+st.warning(SAFETY_NOTICE)
 
 try:
-    df = load_data()
+    file_versions = []
+    for split in ("train", "validation", "test"):
+        path = DATA / f"safechem_{split}.csv"
+        if path.exists():
+            file_versions.append((split, path, path.stat().st_mtime_ns))
+    df = load_data(file_versions)
 except Exception as exc:
     st.error(f"Dataset loading failed: {exc}")
     st.stop()
@@ -152,18 +169,19 @@ if page == "Chemical assessment":
 
     query = st.text_input(
         "Chemical name or CAS number",
-        placeholder="e.g. ethanol or 007790-91-2",
+        placeholder="e.g. ethyl alcohol or 64-17-5",
     )
 
     if query.strip():
         term = query.strip().casefold()
-        exact = df[(df["_name"] == term) | (df["_cas"] == term)]
+        exact = df[(df["_name"] == term) | (df["_cas"] == normalize_cas(term))]
         results = exact
 
         if results.empty:
             contains = df[
                 df["_name"].str.contains(term, regex=False, na=False)
-                | df["_cas"].str.contains(term, regex=False, na=False)
+                | df["_cas"].str.contains(normalize_cas(term), regex=False, na=False)
+                | df["cas_number"].str.contains(term, case=False, regex=False, na=False)
             ]
             results = contains
 
@@ -174,16 +192,33 @@ if page == "Chemical assessment":
                 "number, or the product's SDS."
             )
         else:
-            # Deduplicate displayed choices, not the underlying dataset.
-            results = results.copy()
-            results["_display"] = (
-                results["primary_name"].str.strip()
-                + " | CAS: "
-                + results["cas_number"].str.strip()
+            groups = results.groupby(["_name", "_cas"], sort=False).indices
+            selection = st.selectbox(
+                "Select the intended record",
+                list(groups),
+                format_func=lambda key: (
+                    f"{results.iloc[groups[key][0]]['primary_name']} | "
+                    f"CAS: {results.iloc[groups[key][0]]['cas_number']}"
+                ),
             )
-            options = results["_display"].drop_duplicates().tolist()
-            selected = st.selectbox("Select the intended record", options)
-            record = results[results["_display"] == selected].iloc[0]
+            matches = results.iloc[groups[selection]]
+            label_summaries = matches.reindex(columns=list(TARGETS)).apply(
+                lambda column: column.map(recorded_label)
+            )
+            conflicting_labels = len(label_summaries.drop_duplicates()) > 1
+            record = matches.iloc[0]
+            if conflicting_labels:
+                st.warning(CONFLICT_NOTICE)
+                choices = {
+                    index: f"Record {number} ({matches.loc[index, 'dataset_split']}) | "
+                    + " | ".join(
+                        f"{name}: {label_summaries.loc[index, target]}"
+                        for target, name in TARGETS.items()
+                    )
+                    for number, index in enumerate(matches.index, start=1)
+                }
+                index = st.selectbox("Choose a source record", list(choices), format_func=choices.get)
+                record = matches.loc[index]
 
             st.subheader(record["primary_name"])
             c1, c2, c3 = st.columns(3)
@@ -207,9 +242,7 @@ if page == "Chemical assessment":
                 status = recorded_label(value)
                 st.write(f"**{label}:** {status}")
 
-            st.caption(
-                "A zero label is not proof of universal nonflammability."
-            )
+            st.caption(ZERO_LABEL_NOTICE)
 
             st.subheader("Machine-learning predictions")
             if not models:
@@ -227,6 +260,7 @@ if page == "Chemical assessment":
                         st.markdown(f"**{label}**")
                         if result is None:
                             st.info("Model unavailable")
+                            continue
                         elif result["prediction"] == 1:
                             st.error("Model predicts positive label")
                         else:
@@ -238,10 +272,9 @@ if page == "Chemical assessment":
                                 f"Model positive-class score: {score:.1%}"
                             )
 
-                        st.caption(
-                            "Model output is not a calibrated probability "
-                            "of real-world flammability."
-                        )
+                        st.caption(SCORE_NOTICE)
+                        if metrics.get(target, {}).get("positive_recall") == 0:
+                            st.warning(ZERO_RECALL_NOTICE)
 
             st.subheader("Available properties")
             properties = [
@@ -276,16 +309,24 @@ if page == "Chemical assessment":
                 "flash_point": record.get("flash_point"),
                 "boiling_point": record.get("boiling_point"),
                 "dataset_split": record.get("dataset_split"),
+                "dataset_revision": record.get("dataset_revision"),
+                "safety_notice": SAFETY_NOTICE,
+                "zero_label_notice": ZERO_LABEL_NOTICE,
+                "record_conflict_notice": CONFLICT_NOTICE if conflicting_labels else "",
             }
 
             for target in TARGETS:
                 report[f"recorded_{target}"] = record.get(target)
+                report[f"recorded_{target}_meaning"] = recorded_label(record.get(target))
 
             if models:
+                report["model_score_notice"] = SCORE_NOTICE
                 for target, result in predictions.items():
                     if result:
                         report[f"model_prediction_{target}"] = result["prediction"]
                         report[f"model_positive_score_{target}"] = result["positive_score"]
+                        if metrics.get(target, {}).get("positive_recall") == 0:
+                            report[f"model_evaluation_notice_{target}"] = ZERO_RECALL_NOTICE
 
             st.download_button(
                 "Download assessment as CSV",
@@ -315,6 +356,17 @@ elif page == "Model performance":
     if not metrics:
         st.info("Run `python train_model.py` to generate model metrics.")
     else:
+        if "split_overlap" in metrics:
+            st.subheader("Shared identifiers across dataset splits")
+            st.dataframe([
+                {
+                    "Splits": " / ".join(pair["splits"]),
+                    "Shared CAS identifiers": pair["cas_number"],
+                    "Shared InChI keys": pair["inchi_key"],
+                }
+                for pair in metrics["split_overlap"]
+            ], hide_index=True)
+
         for target, label in TARGETS.items():
             if target not in metrics:
                 continue
@@ -327,6 +379,20 @@ elif page == "Model performance":
             b.metric("Balanced accuracy", f"{result['test_balanced_accuracy']:.1%}")
             c.metric("Positive recall", f"{result['positive_recall']:.1%}")
             d.metric("Positive F1", f"{result['positive_f1']:.1%}")
+
+            baseline = result.get("majority_baseline")
+            if baseline:
+                st.write(
+                    f"Majority-class baseline · Balanced accuracy {baseline['test_balanced_accuracy']:.1%} · "
+                    f"Positive recall {baseline['positive_recall']:.1%} · Positive F1 {baseline['positive_f1']:.1%}"
+                )
+            if "class_counts" in result:
+                st.dataframe([
+                    {"Split": split, **counts}
+                    for split, counts in result["class_counts"].items()
+                ], hide_index=True)
+            if result["positive_recall"] == 0:
+                st.warning(ZERO_RECALL_NOTICE)
 
             st.write("Confusion matrix: `[[TN, FP], [FN, TP]]`")
             st.write(result["confusion_matrix_labels_0_1"])
@@ -344,7 +410,8 @@ elif page == "Dataset explorer":
         term = search.strip().casefold()
         view = df[
             df["_name"].str.contains(term, regex=False, na=False)
-            | df["_cas"].str.contains(term, regex=False, na=False)
+            | df["_cas"].str.contains(normalize_cas(term), regex=False, na=False)
+            | df["cas_number"].str.contains(term, case=False, regex=False, na=False)
         ]
 
     columns = [

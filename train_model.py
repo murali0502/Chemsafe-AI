@@ -1,8 +1,10 @@
+from itertools import combinations
 from pathlib import Path
 import json
 
 import joblib
 import pandas as pd
+from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
@@ -15,6 +17,8 @@ from sklearn.metrics import (
     recall_score,
 )
 from sklearn.pipeline import Pipeline
+
+from safechem_data import normalize_cas
 
 DATA = Path("data")
 OUT = Path("models")
@@ -43,17 +47,52 @@ def read_split(name):
     path = DATA / f"safechem_{name}.csv"
     if not path.exists():
         raise FileNotFoundError(f"Missing dataset: {path}")
-    return pd.read_csv(path, low_memory=False)
+    return pd.read_csv(path, low_memory=False, dtype={"cas_number": str})
+
+
+def identifier_sets(frame):
+    identifiers = {}
+    for column in ("cas_number", "inchi_key"):
+        if column in frame:
+            values = frame[column].dropna().astype(str)
+            normalize = normalize_cas if column == "cas_number" else lambda value: value.strip().casefold()
+            identifiers[column] = set(values.map(normalize)) - {"", "na", "nan", "none", "null", "unknown"}
+    return identifiers
+
+
+def class_counts(frame, target):
+    labels = pd.to_numeric(frame[target], errors="coerce")
+    negative = int(labels.eq(0).sum())
+    positive = int(labels.eq(1).sum())
+    return {"negative": negative, "positive": positive, "excluded": len(frame) - negative - positive}
 
 
 train = read_split("train")
 test = read_split("test")
+splits = {"train": train, "test": test}
+if (DATA / "safechem_validation.csv").exists():
+    splits["validation"] = read_split("validation")
 
-missing_features = set(FEATURES) - set(train.columns)
-if missing_features:
-    raise ValueError(f"Missing model features: {sorted(missing_features)}")
+for name, frame in splits.items():
+    missing = set(FEATURES + TARGETS) - set(frame.columns)
+    if missing:
+        raise ValueError(f"{name}: missing required columns: {sorted(missing)}")
 
-results = {}
+identifiers = {name: identifier_sets(frame) for name, frame in splits.items()}
+overlap = []
+for first, second in combinations(identifiers, 2):
+    counts = {}
+    for column in ("cas_number", "inchi_key"):
+        counts[column] = (
+            len(identifiers[first][column] & identifiers[second][column])
+            if column in identifiers[first] and column in identifiers[second]
+            else None
+        )
+    overlap.append({"splits": [first, second], **counts})
+    print(f"Shared identifiers ({first}, {second}): {counts}")
+
+results = {"split_overlap": overlap}
+
 
 for target in TARGETS:
     print(f"\n{'=' * 60}\nTraining target: {target}")
@@ -76,6 +115,8 @@ for target in TARGETS:
 
     if y_train.nunique() != 2:
         raise ValueError(f"{target} must have both classes in training data.")
+    if y_test.nunique() != 2:
+        raise ValueError(f"{target} must have both classes in test data to report balanced accuracy.")
 
     model = Pipeline([
         ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
@@ -90,8 +131,20 @@ for target in TARGETS:
 
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
+    baseline = DummyClassifier(strategy="most_frequent")
+    baseline.fit(X_train, y_train)
+    baseline_predictions = baseline.predict(X_test)
 
     metrics = {
+        "class_counts": {
+            name: class_counts(frame, target) for name, frame in splits.items()
+        },
+        "majority_baseline": {
+            "test_accuracy": float(accuracy_score(y_test, baseline_predictions)),
+            "test_balanced_accuracy": float(balanced_accuracy_score(y_test, baseline_predictions)),
+            "positive_recall": float(recall_score(y_test, baseline_predictions, zero_division=0)),
+            "positive_f1": float(f1_score(y_test, baseline_predictions, zero_division=0)),
+        },
         "train_rows": int(len(y_train)),
         "test_rows": int(len(y_test)),
         "test_accuracy": float(accuracy_score(y_test, predictions)),
@@ -125,6 +178,8 @@ for target in TARGETS:
     joblib.dump(model, OUT / f"{target}.joblib")
     results[target] = metrics
 
+    print(f"Class counts: {metrics['class_counts']}")
+    print(f"Majority baseline: {metrics['majority_baseline']}")
     print(f"Training records: {len(y_train):,}")
     print(f"Test records: {len(y_test):,}")
     print(f"Accuracy: {metrics['test_accuracy']:.3f}")
