@@ -4,5 +4,8 @@
   "description": "Browser dependencies for the Chemsafe AI Netlify site",
   "dependencies": {
     "jspdf": "4.2.1"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
   }
 }

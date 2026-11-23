@@ -14,6 +14,8 @@ const pageSize = 50;
 let catalog;
 let rows = [];
 let filtered = [];
+let products = [];
+let assessmentProduct = null;
 let page = 0;
 const grouped = new Map();
 
@@ -91,8 +93,9 @@ function downloadCsv(filename, fields, data) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function search(query) {
+function search(query, product = null) {
   if (!catalog || !query.trim()) return;
+  assessmentProduct = product;
   const { records, exact, invalidCas } = searchRows(query, true);
   const matches = get("matches");
   const result = get("assessment-result");
@@ -131,7 +134,7 @@ function search(query) {
     identity.replaceChildren();
     if (select.value !== "") {
       const key = keys[Number(select.value)];
-      renderIdentity(grouped.get(key), candidates.get(key), identity);
+      renderIdentity(grouped.get(key), candidates.get(key), identity, product);
     }
   };
   select.addEventListener("change", update);
@@ -139,7 +142,7 @@ function search(query) {
   update();
 }
 
-function renderIdentity(records, candidate, container) {
+function renderIdentity(records, candidate, container, product) {
   const distinctLabels = new Set(records.map((row) => JSON.stringify(Object.keys(targets).map((key) => row[key]))));
   const identities = new Set(records.map((row) => nameKey(row.inchi_key)).filter(Boolean));
   const formulas = new Set(records.map((row) => nameKey(row.molecular_formula)).filter(Boolean));
@@ -149,6 +152,11 @@ function renderIdentity(records, candidate, container) {
   confirm.type = "button";
   const choose = node("select");
   choose.setAttribute("aria-label", "Source record");
+  if (product) {
+    container.append(node("p",
+      `Selected SDS · ${product.manufacturer} · ${product.product_name} · ${product.product_code}`,
+      "product-marker"));
+  }
   if (disagreement) {
     container.append(node("p", conflictNotice + " Choose the source record to review.", "warning"));
     const placeholder = new Option("Choose a source record", "");
@@ -190,12 +198,12 @@ function renderIdentity(records, candidate, container) {
     }
   }
   choose.addEventListener("change", update);
-  confirm.addEventListener("click", () => renderAssessment(selected(), disagreement));
+  confirm.addEventListener("click", () => renderAssessment(selected(), disagreement, product));
   update();
 }
 
 
-function renderSds(cas) {
+function renderSds(cas, product) {
   const section = node("section", undefined, "panel sds-panel");
   const products = Object.hasOwn(catalog.sds_catalog, cas) ? catalog.sds_catalog[cas] : [];
   section.append(node("h2", "Product Safety Data Sheets"));
@@ -217,7 +225,7 @@ function renderSds(cas) {
   });
   const detail = node("div", undefined, "sds-detail");
   const selected = () => products[Number.parseInt(select.value, 10)] ?? null;
-  select.addEventListener("change", () => {
+  function update() {
     detail.replaceChildren();
     const product = selected();
     if (!product) return;
@@ -235,12 +243,17 @@ function renderSds(cas) {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     detail.append(identity, link);
-  });
+  }
+  select.addEventListener("change", update);
+  const index = product ? products.findIndex((entry) => entry.sds_url === product.sds_url &&
+    entry.product_code === product.product_code) : -1;
+  if (index >= 0) select.value = String(index);
   section.append(select, detail);
+  update();
   return { section, selected };
 }
 
-function renderAssessment(row, conflict) {
+function renderAssessment(row, conflict, product) {
   const result = get("assessment-result");
   const recorded = node("section", undefined, "panel rise");
   const title = node("h2", "Recorded hazard labels");
@@ -266,7 +279,7 @@ function renderAssessment(row, conflict) {
   });
   recorded.append(title, provenance, evidence, node("p", zeroLabel, "muted"));
 
-  const sds = renderSds(row.cas);
+  const sds = renderSds(row.cas, product);
   const model = node("details", undefined, "panel");
   model.append(node("summary", "Show experimental liquids prediction"));
   const meter = node("progress");
@@ -425,6 +438,110 @@ function applyFilters() {
   renderTable();
 }
 
+
+function clearProductSearch() {
+  get("product-status").textContent = "";
+  get("product-matches").hidden = true;
+  get("product-matches").replaceChildren();
+}
+
+function compactCode(value) {
+  return nameKey(value).replace(/[^a-z0-9]/g, "");
+}
+
+function searchProducts(query) {
+  clearProductSearch();
+  const terms = nameKey(query).split(/\s+/).filter(Boolean);
+  if (!terms.length) return;
+  const matches = products.filter((product) => {
+    const searchable = nameKey(`${product.manufacturer} ${product.product_name} ${product.product_code}`);
+    const code = compactCode(product.product_code);
+    return terms.every((term) => {
+      const compact = compactCode(term);
+      return searchable.includes(term) || (compact !== "" && compact === code);
+    });
+  });
+  get("product-status").textContent = matches.length
+    ? `${fmt.format(matches.length)} matching ${matches.length === 1 ? "product" : "products"}`
+    : "No matching catalog product. Check the manufacturer and product code.";
+  if (!matches.length) return;
+
+  const result = get("product-matches");
+  for (const product of matches) {
+    const item = node("div", undefined, "product-result");
+    const description = node("div");
+    description.append(node("strong", product.product_name), node("small",
+      `${product.manufacturer} · ${product.product_code || "Code unavailable"} · SDS ${product.revision_date}`));
+    const select = node("button", "Use product", "primary");
+    select.type = "button";
+    select.setAttribute("aria-label", `Use product ${product.product_code || product.product_name}`);
+    select.addEventListener("click", () => {
+      get("query").value = product.cas;
+      search(product.cas, product);
+      const matchControl = get("matches").querySelector("select");
+      if (matchControl) matchControl.focus();
+    });
+    item.append(description, select);
+    result.append(item);
+  }
+  result.hidden = false;
+}
+
+function renderDashboard() {
+  const stats = get("catalog-stats");
+  const splitCounts = new Map();
+  for (const row of rows) {
+    splitCounts.set(row.dataset_split, (splitCounts.get(row.dataset_split) ?? 0) + 1);
+  }
+  for (const [label, value] of [
+    ["SafeChem records", rows.length],
+    ["CAS identifiers with valid check digits", new Set(rows.map((row) => row.cas).filter(Boolean)).size],
+    ["Dataset splits", splitCounts.size],
+    ["Product SDS entries", products.length],
+  ]) {
+    const item = node("div");
+    item.append(node("dt", label), node("dd", fmt.format(value)));
+    stats.append(item);
+  }
+
+  const distribution = get("dashboard-splits");
+  for (const [split, count] of splitCounts) {
+    const group = node("div");
+    const label = node("label", `${split[0].toUpperCase()}${split.slice(1)} · ${fmt.format(count)} records`);
+    const meter = node("progress");
+    meter.id = `split-${split}`;
+    label.htmlFor = meter.id;
+    meter.max = rows.length;
+    meter.value = count;
+    group.append(label, meter);
+    distribution.append(group);
+  }
+
+  const liquid = catalog.metrics.flammable_liquids;
+  const card = node("div", undefined, "recall-card");
+  const ring = node("div", undefined, "recall-ring");
+  ring.style.setProperty("--recall", percent(liquid.positive_recall));
+  ring.append(node("span", percent(liquid.positive_recall)));
+  const [missed, detected] = liquid.confusion_matrix_labels_0_1[1];
+  card.append(ring, node("p", `${fmt.format(detected)} of ${fmt.format(missed + detected)} positive labels detected on the SafeChem test split.`));
+  get("dashboard-recall").append(card);
+
+  if (products.length) {
+    const examples = get("product-examples");
+    examples.append(node("span", "Try"));
+    for (const { product_code: code } of products.filter((entry) => entry.product_code).slice(0, 3)) {
+      const button = node("button", code);
+      button.type = "button";
+      button.addEventListener("click", () => {
+        get("product-query").value = code;
+        searchProducts(code);
+      });
+      examples.append(button);
+    }
+  }
+  get("dashboard-overview").hidden = false;
+}
+
 async function load() {
   const response = await fetch("./catalog.json");
   if (!response.ok) throw new Error(`Catalog request returned ${response.status}`);
@@ -440,23 +557,31 @@ async function load() {
     return row;
   });
   get("dataset-link").href = `${source}/tree/${catalog.revision}`;
-  const stats = get("catalog-stats");
-  for (const [label, value] of [["SafeChem records", rows.length], ["Valid-format CAS identifiers", new Set(rows.map((row) => row.cas).filter(Boolean)).size], ["Dataset splits", new Set(rows.map((row) => row.dataset_split)).size]]) {
-    const item = node("div");
-    item.append(node("dt", label), node("dd", fmt.format(value)));
-    stats.append(item);
-  }
+  products = Object.entries(catalog.sds_catalog)
+    .flatMap(([cas, entries]) => entries.map((entry) => ({ ...entry, cas })));
+  renderDashboard();
   renderModels();
   applyFilters();
   get("catalog-status").hidden = true;
-  document.querySelectorAll("#search-form button, [data-example]").forEach((button) => { button.disabled = false; });
+  document.querySelectorAll("#search-form button, #product-form button, [data-example]").forEach((button) => { button.disabled = false; });
 }
 
-get("query").addEventListener("input", () => {
+function clearAssessment() {
   get("matches").hidden = true;
   get("assessment-result").hidden = true;
   get("search-status").textContent = "";
+  assessmentProduct = null;
+}
+
+get("product-query").addEventListener("input", () => {
+  clearProductSearch();
+  if (assessmentProduct) clearAssessment();
 });
+get("product-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  searchProducts(get("product-query").value);
+});
+get("query").addEventListener("input", clearAssessment);
 get("search-form").addEventListener("submit", (event) => {
   event.preventDefault();
   search(get("query").value);

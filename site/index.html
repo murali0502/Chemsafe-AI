@@ -3,22 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0a1022">
+  <meta name="theme-color" content="#d8f1f1">
   <meta name="description" content="Look up recorded chemical flammability evidence in SafeChem.">
   <title>Chemsafe AI · Chemical assessments</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./dashboard.css">
   <script src="./app.js" type="module"></script>
 </head>
-<body>
+<body class="dashboard">
   <a href="#main" class="skip">Skip to content</a>
   <header class="top">
     <div class="shell top-inner">
-      <a class="brand" href="#assessment"><span class="mark" aria-hidden="true">Cs</span> Chemsafe <span>AI</span></a>
+      <a class="brand" href="#assessment"><span class="mark" aria-hidden="true">Cs</span><span class="brand-label">Chemsafe AI</span></a>
       <nav aria-label="Main navigation">
-        <a href="#assessment">Assessment</a>
-        <a href="#models">Model results</a>
-        <a href="#explore">Explore data</a>
-        <a href="./case-study.html">Case study</a>
+        <a href="#assessment"><i class="nav-icon nav-assessment" aria-hidden="true"></i>Assessment</a>
+        <a href="#models"><i class="nav-icon nav-model" aria-hidden="true"></i>Model results</a>
+        <a href="#explore"><i class="nav-icon nav-data" aria-hidden="true"></i>Explore data</a>
+        <a href="./case-study.html"><i class="nav-icon nav-case" aria-hidden="true"></i>Case study</a>
       </nav>
     </div>
   </header>
@@ -26,27 +27,55 @@
     <p id="catalog-status" class="status" role="status">Loading the SafeChem catalog…</p>
 
     <section id="assessment" class="view" aria-labelledby="assessment-title">
-      <div class="hero">
-        <div class="hero-copy">
-          <h1 id="assessment-title">Chemical<br>assessments<span>.</span></h1>
-          <p>Find a substance, confirm its identity, and review recorded flammability evidence from SafeChem.</p>
+      <header class="dashboard-title">
+        <div>
+          <h1 id="assessment-title">Chemical assessments</h1>
+          <p>Review recorded flammability evidence and find the manufacturer’s SDS for an exact product.</p>
         </div>
-        <div class="orbit-art" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
+        <a class="button-link dashboard-link" href="./case-study.html">View case study</a>
+      </header>
+
+      <div class="lookup-grid">
+        <section class="panel search-panel" aria-labelledby="search-title">
+          <h2 id="search-title">Find a substance</h2>
+          <form id="search-form" class="search-row" role="search">
+            <label for="query">Chemical name, IUPAC name, or CAS number</label>
+            <input id="query" type="search" placeholder="Ethanol or 64-17-5" required>
+            <button class="primary" type="submit" disabled>Search</button>
+          </form>
+          <div class="examples"><span>Try</span><button type="button" disabled data-example="ethanol">Ethanol</button><button type="button" disabled data-example="67-56-1">67-56-1</button><button type="button" disabled data-example="acetone">Acetone</button></div>
+        </section>
+        <section class="panel product-panel" aria-labelledby="product-title">
+          <h2 id="product-title">Find a product SDS</h2>
+          <form id="product-form" class="search-row" role="search">
+            <label for="product-query">Manufacturer, product name, or product code</label>
+            <input id="product-query" type="search" placeholder="Enter a product code" required>
+            <button class="primary" type="submit" disabled>Find SDS</button>
+          </form>
+          <div id="product-examples" class="examples"></div>
+          <p id="product-status" role="status"></p>
+          <div id="product-matches" hidden></div>
+        </section>
       </div>
-      <section class="panel search-panel" aria-labelledby="search-title">
-        <h2 id="search-title">Find a substance</h2>
-        <form id="search-form" class="search-row" role="search">
-          <label for="query">Chemical name, IUPAC name, or CAS number</label>
-          <input id="query" type="search" placeholder="Ethanol or 64-17-5" required>
-          <button class="primary" type="submit" disabled>Search</button>
-        </form>
-        <div class="examples"><span>Try</span><button type="button" disabled data-example="ethanol">Ethanol</button><button type="button" disabled data-example="67-56-1">67-56-1</button><button type="button" disabled data-example="acetone">Acetone</button></div>
-      </section>
       <div class="notice"><strong>Research prototype</strong><p>Verify the exact product against its current Safety Data Sheet (SDS) before making safety decisions.</p></div>
       <p id="search-status" role="status"></p>
       <div id="matches" hidden></div>
       <div id="assessment-result" hidden></div>
-      <dl id="catalog-stats" class="stats"></dl>
+      <div id="dashboard-overview" hidden>
+        <dl id="catalog-stats" class="stats"></dl>
+        <div class="dashboard-insights">
+          <section class="panel" aria-labelledby="split-title">
+            <h2 id="split-title">Dataset coverage</h2>
+            <div id="dashboard-splits" class="split-chart"></div>
+            <a href="#explore">Browse the dataset</a>
+          </section>
+          <section class="panel model-overview" aria-labelledby="recall-title">
+            <h2 id="recall-title">Liquid model recall</h2>
+            <div id="dashboard-recall"></div>
+            <a href="#models">Review both models</a>
+          </section>
+        </div>
+      </div>
     </section>
 
     <section id="models" class="view subpage" hidden aria-labelledby="models-title">

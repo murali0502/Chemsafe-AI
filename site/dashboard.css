@@ -1,0 +1,138 @@
+:root {
+  color-scheme: light;
+  --ink: #153448;
+  --muted: #4a6477;
+  --base: #ecf9fa;
+  --surface: #fff;
+  --border: #d5e8eb;
+  --blue: #315ba6;
+  --teal: #087d84;
+  --amber: #75501a;
+}
+
+body {
+  background: radial-gradient(ellipse at top right, #e2f6f5 0%, transparent 44rem), #edf8fa;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(145px, 186px) minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  max-width: 1500px;
+  min-height: 100vh;
+  margin-inline: auto;
+}
+
+.dashboard .top {
+  grid-row: span 2;
+  background: linear-gradient(165deg, #087a84, #096470 78%);
+  color: white;
+  border: 0;
+}
+
+.dashboard .top-inner {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  display: block;
+  padding: 1.4rem .72rem;
+}
+
+.dashboard .brand {
+  color: #fff;
+  font-size: 1.03rem;
+  margin: 0 .5rem 2rem;
+}
+
+.dashboard .brand > .brand-label { color: #fff; }
+.dashboard .mark { background: #e6fbf7; color: #085b68; border-color: transparent; }
+.dashboard nav { display: grid; gap: .38rem; }
+
+.dashboard nav a {
+  color: #edfbff;
+  font-size: .89rem;
+  display: flex;
+  align-items: center;
+  gap: .54rem;
+  padding: .65rem .48rem;
+}
+
+.dashboard nav a:hover { background: #ffffff25; }
+.dashboard nav a[aria-current] { color: #064550; background: #d7f9f5; border-color: #c5f4ee; }
+
+.nav-icon { width: .92rem; height: .92rem; border: 1.6px solid currentColor; border-radius: .22rem; flex: 0 0 .92rem; }
+.nav-assessment { background: linear-gradient(currentColor, currentColor) center / 70% 1px no-repeat; }
+.nav-model { background: linear-gradient(currentColor,currentColor) 20% 70% / 2px 38% no-repeat, linear-gradient(currentColor,currentColor) 50% 65% / 2px 62% no-repeat, linear-gradient(currentColor,currentColor) 80% 80% / 2px 25% no-repeat; }
+.nav-data { border-radius: 50%; background: linear-gradient(currentColor,currentColor) center / 100% 1px no-repeat; }
+.nav-case { border-radius: .15rem .46rem .15rem .15rem; }
+
+.dashboard main.shell, .dashboard .footer.shell { width: min(100% - 3rem, 1200px); }
+.dashboard main { padding-block: 2rem 2.4rem; }
+.dashboard-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.dashboard-title h1 { font-size: clamp(2rem, 5vw, 3.7rem); letter-spacing: -.055em; line-height: 1.02; }
+.dashboard-title p { color: var(--muted); margin-top: .55rem; max-width: 43rem; }
+.dashboard-link { white-space: nowrap; background: white; }
+.lookup-grid, .dashboard-insights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.lookup-grid .panel { margin: 0; height: 100%; }
+.search-panel { border-top: 3px solid #0e9fa6; }
+.product-panel { border-top: 3px solid #6781e4; }
+#product-status:empty, #product-matches:empty { display: none; }
+#product-status { color: var(--muted); }
+.product-result { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: .65rem; border-top: 1px solid var(--border); padding: .55rem 0; }
+.product-result small { color: var(--muted); display: block; overflow-wrap: anywhere; }
+.product-marker { margin-top: .6rem; padding: .6rem .7rem; background: #e6f7f6; color: #185358; border-radius: .65rem; }
+
+input, select, button { background: #f6fbfd; color: var(--ink); }
+button:not(:disabled):hover { background: #dff6f5; border-color: #8dbfc5; }
+.primary { background: linear-gradient(120deg, #096d79, #08777a); color: #fff; }
+.primary:not(:disabled):hover { background: linear-gradient(120deg, #095965, #09656a); }
+.panel, .stats > div, .table-wrap { box-shadow: 0 .35rem 1.15rem #1452620b; }
+.notice, .warning { background: #fff3d8; border-color: #e4c372; color: var(--amber); }
+.notice p { color: #5d481f; }
+.stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; }
+.stats > div { border-top: 3px solid #10a4a8; }
+.stats > div:nth-child(2) { border-top-color: #6886e3; }
+.stats > div:nth-child(3) { border-top-color: #db9a32; }
+.stats > div:nth-child(4) { border-top-color: #44a59a; }
+.stats dd { color: #174b57; }
+.split-chart { display: grid; gap: .7rem; }
+.split-chart label { display: block; color: var(--muted); font-size: .89rem; }
+progress { background: #e1f0f2; }
+progress::-webkit-progress-bar { background: #e1f0f2; }
+progress::-webkit-progress-value { background: linear-gradient(90deg, #1f8f9b, #50c9c2); }
+progress.baseline::-webkit-progress-value { background: #6b80d7; }
+progress.baseline::-moz-progress-bar { background: #6b80d7; }
+.recall-card { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+.recall-ring { display: grid; place-items: center; flex: 0 0 6rem; aspect-ratio: 1; border-radius: 50%; background: conic-gradient(#0e9ca2 var(--recall), #e1f1f2 0); }
+.recall-ring span { display: grid; place-items: center; width: 79%; aspect-ratio: 1; border-radius: 50%; background: #fff; font-weight: 750; }
+.recall-card p { color: var(--muted); max-width: 18rem; }
+.evidence-item:not(.warning):hover { background: #eef9fa; border-color: #83bfc6; }
+.product-panel .examples:empty { display: none; }
+th { background: #e4f3f4; color: #123e52; }
+tbody tr:hover { background: #f0f9fa; }
+.identity-note { color: #75501a; }
+
+@media (max-width: 820px) {
+  .dashboard { display: block; }
+  .dashboard .top-inner { position: static; display: flex; flex-wrap: wrap; padding: .75rem 1rem; }
+  .dashboard .brand { margin: 0; }
+  .dashboard nav { display: flex; flex-wrap: wrap; }
+  .dashboard nav a { padding: .42rem .5rem; }
+  .dashboard main.shell, .dashboard .footer.shell { width: calc(100% - 1.5rem); }
+}
+@media (max-width: 595px) {
+  .dashboard-title { display: block; }
+  .dashboard-link { display: none; }
+  .lookup-grid, .dashboard-insights { grid-template-columns: 1fr; }
+  .dashboard .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .product-result { grid-template-columns: 1fr; }
+}
+
+.case-page .top { background: #fff; }
+.case-page .mark { background: #d7f9f5; color: #085b68; border-color: transparent; }
+.case-page nav a:hover, .case-page nav a[aria-current] { background: #d7f9f5; color: #064550; border-color: #c5f4ee; }
+.case-page .case-hero { background: linear-gradient(115deg, #fff, #d5f4f2); border-color: #c4e3e6; }
+.case-page .case-hero h1 { color: #153448; }
+.case-page .case-hero p { color: var(--muted); }
+.case-page .case-hero .case-eyebrow { color: var(--teal); }
+.case-page .button-link.primary { color: #fff; }

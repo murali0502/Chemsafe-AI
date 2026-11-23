@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "cas_number": "64-17-5",
+    "manufacturer": "Fisher Scientific Company",
+    "product_name": "Ethanol 200 Proof USP EP ACS",
+    "product_code": "A409-4",
+    "revision_date": "2025-12-18",
+    "sds_url": "https://www.fishersci.com/store/msds?partNumber=A4094&productDescription=ETHANOL+200+PRF+USP+EP+ACS+4L&vendorId=VN00033897&countryCode=US&language=en"
+  },
+  {
+    "cas_number": "67-64-1",
+    "manufacturer": "Fisher Scientific Company",
+    "product_name": "Acetone",
+    "product_code": "A18-4",
+    "revision_date": "2025-12-18",
+    "sds_url": "https://www.fishersci.com/store/msds?partNumber=A184&productDescription=ACETONE+CERTIFIED+ACS+4L&vendorId=VN00033897&countryCode=US&language=en"
+  },
+  {
+    "cas_number": "67-56-1",
+    "manufacturer": "Fisher Scientific Company",
+    "product_name": "Methanol",
+    "product_code": "A452-4",
+    "revision_date": "2025-12-18",
+    "sds_url": "https://www.fishersci.com/store/msds?partNumber=A4524&productDescription=METHANOL+CERT+ACS%2FHPLC+4L&vendorId=VN00033897&countryCode=US&language=en"
+  },
+  {
+    "cas_number": "67-63-0",
+    "manufacturer": "Fisher Scientific Company",
+    "product_name": "2-Propanol",
+    "product_code": "A416-4",
+    "revision_date": "2025-12-18",
+    "sds_url": "https://www.fishersci.com/store/msds?partNumber=A4164&productDescription=ISOPROPYL+ALCOHOL+CERTIFIED+ACS+4L&vendorId=VN00033897&countryCode=US&language=en"
+  },
+  {
+    "cas_number": "141-78-6",
+    "manufacturer": "Fisher Scientific Company",
+    "product_name": "Ethyl acetate",
+    "product_code": "E196-4",
+    "revision_date": "2025-12-18",
+    "sds_url": "https://www.fishersci.com/store/msds?partNumber=E1964&productDescription=ETHYL+ACETATE+OPTIMA+GRADE+4L&vendorId=VN00033897&countryCode=US&language=en"
+  }
+]

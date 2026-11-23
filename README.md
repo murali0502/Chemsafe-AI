@@ -8,7 +8,8 @@ Chemsafe AI is a portfolio project for reviewing recorded chemical flammability 
 
 1. Search for `64-17-6` to see how the app catches a mistyped CAS check digit.
 2. Search for `64-17-5` or `ethanol` and confirm the **ETHYL ALCOHOL** record.
-3. Review the recorded liquid and solid labels, then download the PDF or CSV assessment. Open **Model results** to see how both models performed on the SafeChem test split.
+3. Search product code `A409-4` to find Fisher Scientific’s ethanol SDS. Choose the product and confirm its SafeChem record, then download a PDF with the manufacturer link.
+4. Open **Model results** to compare both models on the SafeChem test split.
 
 ## What the app does
 
@@ -49,9 +50,13 @@ Open [localhost:8000](http://localhost:8000). For the Streamlit version, run `py
 
 Connect the repository's `main` branch to a Netlify project. Netlify reads the build and publish settings from `netlify.toml`, and `runtime.txt` selects Python 3.11. For a manual deploy, publish the generated `netlify-dist/` directory.
 
+## Release checks
+
+The Netlify build checks that public manufacturer links return PDFs. The Chromium smoke test covers CAS validation, source conflicts, product lookup, and PDF downloads. Run it against any preview with `CHEMSAFE_TEST_URL=http://localhost:8000/ node scripts/smoke.cjs` after installing Chromium with `npx playwright install chromium`.
+
 ## Add product SDS entries
 
-The public catalog starts empty. Add entries approved for public sharing to `sds_catalog.json` and rebuild. Each entry requires `cas_number`, `manufacturer`, `product_name`, `revision_date` in `YYYY-MM-DD` format, and an official HTTPS `sds_url`. The `product_code` field is optional.
+The public starter catalog links to five official Fisher Scientific SDS documents. Add entries approved for public sharing to `sds_catalog.json` and rebuild. Each entry requires `cas_number`, `manufacturer`, `product_name`, `revision_date` in `YYYY-MM-DD` format, and an official HTTPS `sds_url`. The `product_code` field is optional.
 
 Check that each sheet matches the exact manufacturer and product and is the current revision before publishing it. Catalog entries are public.
 
